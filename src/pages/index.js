@@ -1,73 +1,38 @@
 import React from "react"
 
 import SEO from "../components/seo"
+import MeImg from "../images/crusty-hard-128.gif"
 
-import Hyperlinks from "./Hyperlinks"
-import SkillList from "./SkillList"
-
-import Squeeze from "../components/Squeeze"
-import Opts from "../components/Opts"
-
-const socialLinks = [
+const links = [
   {
-    title: 'twitter',
-    href: 'https://twitter.com/ethanmuller',
+    title: 'Cadavre Exquis',
+    href: 'https://cadavre-exquis.glitch.me/public/',
+    description: 'A web app in which we draw a very tall picture together. Drawings show up live. Play it with friends!',
   },
   {
-    title: 'instagram',
-    href: 'https://instagram.com/emuuuuuuuu',
+    title: 'Goofball',
+    href: 'https://goofball.fun',
+    description: 'A mobile game in which you touch and drag to hit the long-eyed dudes.',
+  },
+  {
+    title: 'Wooltergeist',
+    href: 'https://emuuuu.itch.io/wooltergeist',
+    description: `A web game in which you are a demon! Possess and unpossess to progress!
+A Pico-8 game, made in 48 hours.`,
   },
 ]
 
+
 const IndexPage = () => (
   <>
-    <SEO title="Ethan Muller's Website" />
-
-    <main className="o-layout">
+    <SEO title="emu media" />
+    
+    <header>
+      <img src={MeImg} alt="Crusty drawing of me" />
+    </header>
+    
+    <main>
       
-      <h1 className="hi">Hi I'm Ethan Muller</h1>
-      <header className="a">
-        <Squeeze>
-          <p>Welcome to my web page.</p>
-          <p>I’m a designer/developer.</p>
-          <p>I’m interested in the space between design and development.</p>
-          <p>I want to build meaningful and/or fun tools and software.</p>
-          <div style={{'margin-top': '3em'}}>
-            <Opts />
-          </div>
-        </Squeeze>
-      </header>
-      
-      <h2 className="b">Hyper<wbr />links</h2>
-      <div className="c">
-        <Squeeze>
-          <Hyperlinks />
-          <ul>
-            {
-            socialLinks.map(i => (
-                <li>
-                  <a style={{
-                     display: 'inline-block',
-                     padding: '0.5rem 0.5rem  0.5rem 0',
-                     }} href={i.href}>
-                    {i.title}
-                  </a>
-                </li>
-              ))
-            }
-</ul>
-</Squeeze>
-
-      </div>
-
-          <h2 className="d skills">Skills</h2>
-          
-            <div className="e">
-<SkillList />
-</div>
-      
-
-      <footer className="bye">Bye I'm Ethan Muller</footer>
     </main>
   </>
 )
