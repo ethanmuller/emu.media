@@ -1,0 +1,262 @@
+:root {
+  --fg: black;
+  --bg: white;
+  --link: #001AFF;
+  --link-active: #FF00B8;
+  --link-visited: #A46DC6;
+}
+html {
+  font-family: sans-serif;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+
+  color: var(--fg);
+  background: var(--bg);
+}
+
+@media (min-width: 1000px) {
+  body {
+  }
+  main {
+    max-width: 35rem;
+    margin: 5rem auto;
+    border: 1px solid;
+  }
+}
+
+h1, h2, h3, footer {
+  text-transform: lowercase;
+  font-family: 'Major Mono Display', monospace;
+  font-weight: 500;
+  margin: 0;
+  text-align: center;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  display: inline-block;
+
+  font-weight: 700;
+}
+
+a:link {
+  color: var(--link);
+}
+
+a:visited {
+  color: var(--link-visited);
+}
+
+a:hover,
+a:focus,
+a:active {
+  color: var(--link-active);
+}
+
+button {
+  font-family: 'Major Mono Display', monospace;
+  text-transform: lowercase;
+  font-size: 18px;
+  padding: 1rem;
+
+  display: flex;
+  align-items: center;
+}
+
+button svg {
+  margin-right: 1rem;
+
+  transition: all 0.1s linear;
+}
+
+button:hover svg,
+button:focus svg {
+  transform: rotate(45deg);
+}
+
+button[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+:focus {
+  outline: 3px solid var(--fg);
+}
+
+small {
+  font-size: 1em;
+}
+
+p:not(:last-child) {
+  margin-bottom: 1em;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+small {
+  display: block;
+}
+
+.o-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "hi"
+    "a"
+    "b"
+    "c"
+    "d"
+    "e"
+    "bye";
+
+  min-height: 100vh;
+}
+
+@media (min-width: 380px) {
+  .o-layout {
+    grid-template-columns: 1.4fr 1fr;
+    grid-template-areas:
+      "hi hi"
+      "a a"
+      "b d"
+      "c e"
+      "bye bye";
+  }
+
+  .d, .e {
+    border-left: 1px solid;
+  }
+}
+
+header {
+}
+
+h1, h2 {
+  border-bottom: 1px solid;
+}
+
+footer {
+  border-top: 1px solid;
+}
+
+h1, footer {
+  padding: 1em 0;
+
+  font-size: 6vw;
+}
+
+@media (min-width: 390px) {
+  h1, footer {
+    font-size: 20px;
+  }
+}
+
+h2 {
+  padding: 1em 0;
+
+  font-size: 20px;
+
+  border-top: 1px solid;
+
+  position: sticky;
+  top: -1px;
+  background: var(--bg);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hi {
+  grid-area: hi;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bye {
+  grid-area: bye;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.a {
+  grid-area: a;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  /* padding: 3em; */
+}
+
+.b {
+  grid-area: b;
+}
+
+.c {
+  grid-area: c;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.d {
+  grid-area: d;
+}
+
+.e {
+  grid-area: e;
+
+  padding: 3rem 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dash-list {
+  /* display: grid; */
+  /* grid-template-columns: 1fr 1fr; */
+  /* grid-template-columns: repeat( auto-fit, minmax(7em, 1fr) ); */
+}
+
+.dash-list li::before {
+  content: '- ';
+}
+
+label {
+  display: block;
+}
+
+/* eventually want to replace this with modular css, */
+/* which could get applied to contained general elements */
+input {
+  margin-right: 1rem;
+}
+
+label {
+  padding: 1rem;
+  font-family: 'Major Mono Display', monospace;
+  text-transform: lowercase;
+}
