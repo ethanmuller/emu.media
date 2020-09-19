@@ -3,36 +3,28 @@ import React from "react"
 import SEO from "../components/seo"
 import MeImg from "../images/crusty-hard-128.gif"
 
-const links = [
-  {
-    title: 'Cadavre Exquis',
-    href: 'https://cadavre-exquis.glitch.me/public/',
-    description: 'A web app in which we draw a very tall picture together. Drawings show up live. Play it with friends!',
-  },
-  {
-    title: 'Goofball',
-    href: 'https://goofball.fun',
-    description: 'A mobile game in which you touch and drag to hit the long-eyed dudes.',
-  },
-  {
-    title: 'Wooltergeist',
-    href: 'https://emuuuu.itch.io/wooltergeist',
-    description: `A web game in which you are a demon! Possess and unpossess to progress!
-A Pico-8 game, made in 48 hours.`,
-  },
-]
-
+const homeMainStyle = {
+  maxWidth: '32em',
+}
 
 const IndexPage = () => (
   <>
     <SEO title="emu media" />
     
     <header>
-      <img src={MeImg} alt="Crusty drawing of me" />
+      <img src={MeImg} alt="crusty drawing of me" />
+      <div>
+        <h1>hi, i am <a href="https://www.ethanmuller.com/">ethan muller</a>.</h1>
+        <p>here are some media i've made&nbsp;for&nbsp;you:</p>
+      </div>
     </header>
     
-    <main>
-      
+    <main style={homeMainStyle}>
+      <ul>
+        <li><a href="https://cadavre-exquis.glitch.me/public/">cadavre exquis</a> is a web app in which we draw a very tall picture together. drawings show up live. it's fun to play in groups. :)</li>
+        <li><a href="https://goofball.fun">goofball</a> is a mobile game in which you touch and drag to hit the long-eyed dudes. don't touch ground to increase score.</li>
+        <li><a href="https://emuuuu.itch.io/wooltergeist">wooltergeist</a> is a game in which you are a demon! possess and unpossess to progress! playable in your browser! made in 48 hours.</li>
+      </ul>
     </main>
   </>
 )
