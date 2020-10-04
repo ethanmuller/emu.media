@@ -15,7 +15,7 @@ const IndexPage = () => (
       <img src={MeImg} alt="crusty drawing of me" />
       <div>
         <h1>hi, i am <a href="https://www.ethanmuller.com/">ethan muller</a>.</h1>
-        <p>here are some media i've made&nbsp;for&nbsp;you:</p>
+        <p>here are some pieces of media i've made&nbsp;for&nbsp;you:</p>
       </div>
     </header>
     
