@@ -7,6 +7,7 @@
   "devDependencies": {},
   "license": "MIT",
   "scripts": {
+    "build": "echo 'there is nothing to build, since its all static :)'",
     "start": "npm run develop"
   }
 }
