@@ -3,17 +3,10 @@
   "description": "a website for posting interactive media shit",
   "version": "0.1",
   "author": "Ethan Muller <hi@emu.media>",
-  "dependencies": {
-  },
-  "devDependencies": {
-  },
+  "dependencies": {},
+  "devDependencies": {},
   "license": "MIT",
   "scripts": {
     "start": "npm run develop"
-  },
-  "repository": {
-    "type": "git",
-  },
-  "bugs": {
   }
 }
