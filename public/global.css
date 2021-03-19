@@ -4,10 +4,15 @@ html, body {
 }
 
 body {
+  font-family: 'IBM Plex Mono', monospace;
+
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
+
+  background: var(--bg);
+  color: var(--text);
 }
 
 main {
@@ -16,4 +21,30 @@ main {
 
 p {
   margin: 0;
+}
+
+h1 {
+  font-size: 1rem;
+  font-weight: normal;
+  margin: 0;
+}
+
+.tag {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+
+  width: 6.5rem;
+}
+
+.tag svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.label {
+  text-align: right;
+  transform: translate(-100%, 0) rotate(-90deg);
+  transform-origin: bottom right;
 }
