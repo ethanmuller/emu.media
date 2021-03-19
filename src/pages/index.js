@@ -17,12 +17,16 @@ const IndexPage = () => (
         <h1>
           hi, i am <a href="https://www.ethanmuller.com/">ethan muller</a>.
         </h1>
-        <p>here are some pieces of media i've made&nbsp;for&nbsp;you:</p>
+        <p>i made these things:</p>
       </div>
     </header>
 
     <main style={homeMainStyle}>
       <ul>
+        <li>
+          <a href="http://forklore.emu.media/">forklore</a> is a multiplayer
+          writing + drawing tool where you can tell interactive stories with friends.
+        </li>
         <li>
           <a href="https://omg.emu.media/">oh my gosh</a> is a music track with
           a companion web app. The app lets you change the rate of audio
