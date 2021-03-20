@@ -26,6 +26,8 @@ function setup() {
     // alert('Heads up: this player is a little buggy in Firefox. Sorry.')
   }
 
+  min = -300;
+  max = 300;
   targetV = 100;
   v = targetV;
 
@@ -37,6 +39,18 @@ function setup() {
 
   // slider = createSlider(-200, 200, v)
   // controls.appendChild(slider.elt)
+
+  const rate = document.createElement("DIV");
+  rate.id = "rate";
+  controls.appendChild(rate);
+
+  const rateMeter = document.createElement("METER");
+  rateMeter.id = "rateMeter";
+  rateMeter.setAttribute("value", targetV);
+  rateMeter.setAttribute("min", min);
+  rateMeter.setAttribute("max", max);
+  rate.appendChild(rateMeter);
+
 
   playbtn = createButton(
     '<svg width="28" height="33" viewBox="0 0 28 33" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28 16.5L0.249998 32.5215L0.25 0.47853L28 16.5Z" fill="#fff"/></svg>'
@@ -67,13 +81,58 @@ function setup() {
     clickB.play();
   });
   controls.appendChild(playbtn.elt);
+  sb = createButton("<< SPEED");
+  sb.elt.id = "slow";
+  sb.elt.setAttribute("aria-label", "slow down");
+  sb.mouseClicked(() => {
+    targetV = targetV - rateInc;
+    rateMeter.setAttribute("value", targetV);
 
-  fb = createButton("faster");
+    // art.style.animationDuration =
+    //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
+
+    if (mySound.isPlaying()) {
+      // need to do this or ios safari won't update speed
+      // art.style.animationPlayState = "paused";
+      // window.setTimeout(
+      //   () => (art.style.animationPlayState = "running"),
+      //   0
+      // );
+    }
+
+    // if (targetV < 0) {
+    //   document.body.classList.add("reverse");
+    // } else {
+    //   document.body.classList.remove("reverse");
+    // }
+  });
+  sb.touchStarted(() => {
+    clickA.setVolume(0.1);
+    clickA.stop();
+    clickA.play();
+  });
+  sb.touchEnded(() => {
+    clickB.setVolume(0.1);
+    clickB.stop();
+    clickB.play();
+  });
+
+  rate.appendChild(sb.elt);
+
+  //canvasSizeToParentSize()
+
+  //mySound.loop();
+
+  mainEl = document.querySelector("main");
+  // mainEl.appendChild(toolbar);
+
+  fb = createButton("SPEED >>");
   fb.elt.id = "fast";
   fb.elt.setAttribute("aria-label", "speed up");
   // fb.elt.style.transform = "scaleX(-1)";
   fb.mouseClicked(() => {
     targetV = targetV + rateInc;
+    rateMeter.setAttribute("value", targetV);
 
     // art.style.animationDuration =
     //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
@@ -115,50 +174,9 @@ function setup() {
     clickB.stop();
     clickB.play();
   });
-  controls.appendChild(fb.elt);
 
-  sb = createButton("slower");
-  sb.elt.id = "slow";
-  sb.elt.setAttribute("aria-label", "slow down");
-  sb.mouseClicked(() => {
-    targetV = targetV - rateInc;
+  rate.appendChild(fb.elt);
 
-    // art.style.animationDuration =
-    //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
-
-    if (mySound.isPlaying()) {
-      // need to do this or ios safari won't update speed
-      // art.style.animationPlayState = "paused";
-      // window.setTimeout(
-      //   () => (art.style.animationPlayState = "running"),
-      //   0
-      // );
-    }
-
-    // if (targetV < 0) {
-    //   document.body.classList.add("reverse");
-    // } else {
-    //   document.body.classList.remove("reverse");
-    // }
-  });
-  sb.touchStarted(() => {
-    clickA.setVolume(0.1);
-    clickA.stop();
-    clickA.play();
-  });
-  sb.touchEnded(() => {
-    clickB.setVolume(0.1);
-    clickB.stop();
-    clickB.play();
-  });
-  controls.appendChild(sb.elt);
-
-  //canvasSizeToParentSize()
-
-  //mySound.loop();
-
-  mainEl = document.querySelector("main");
-  // mainEl.appendChild(toolbar);
 }
 
 function draw() {
@@ -204,7 +222,7 @@ function draw() {
   textAlign(CENTER);
   text(
     Math.round(v) + "%",
-    map(targetV, -300, 300, width / 2 - hw, width / 2 + hw) + 2,
+    map(targetV, min, max, width / 2 - hw, width / 2 + hw) + 2,
     height - 30
   );
 }

@@ -29,6 +29,10 @@ h1 {
   margin: 0;
 }
 
+button {
+  font: inherit;
+}
+
 .tag {
   position: fixed;
   bottom: 0;
