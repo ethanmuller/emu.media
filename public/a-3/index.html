@@ -29,8 +29,32 @@
         --fg: black;
         --text: black;
       }
+
+      body {
+        /* overflow: hidden; */
+      }
+
+      main {
+        overflow: hidden;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(-360deg);
+        }
+      }
       img {
         mix-blend-mode: multiply;
+
+        animation: spin 120s linear infinite;
+      }
+      audio {
+        position: absolute;
+        bottom: 0;
+        left: 0;
       }
     </style>
 
@@ -69,7 +93,8 @@
 
     <main>
       <article>
-        <img src="./a-3.png" alt="satanic lookin dude. floating head. all kind of eyes all over his face." />
+        <img src="./a-3.png" alt="satanic lookin dude. floating head. all kind of eyes (or slits) all over his face." />
+        <audio controls src="./a-3.wav">
       </article>
     </main>
   </body>
