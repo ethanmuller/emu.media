@@ -41,10 +41,25 @@ h1 {
   display: block;
   max-width: 100%;
   height: auto;
+
+  color: var(--bg);
+}
+
+.tag svg .bg {
+  fill: var(--fg);
 }
 
 .label {
   text-align: right;
   transform: translate(-100%, 0) rotate(-90deg);
   transform-origin: bottom right;
+}
+
+.listing a {
+  display: inline-block;
+  padding: 0.5em;
+}
+
+img {
+  max-width: 100%;
 }
