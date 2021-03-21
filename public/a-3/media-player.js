@@ -239,8 +239,8 @@ function audioDraw() {
 }
 
 function draw() {
-  clear();
 
+  clear();
   audioDraw();
 
   noStroke();
@@ -251,6 +251,7 @@ function draw() {
   // const s = 0.5;
   // scale(0.5);
   const rate = map(targetV, min, max, -3, 3)
+  t = t + deltaTime * rate;
   const playMod = playing ? 0.8 : 0.3;
   const lfo1  = Math.sin(t * Math.PI * bpms * rate / 4 * 4 + Math.PI / 2 - Math.PI * 0.3) * playMod;
   const lfo1a = Math.sin(t * Math.PI * bpms * rate     * 2 + Math.PI / 2 - Math.PI * 0.3) * playMod;
@@ -264,12 +265,16 @@ function draw() {
   scale(1, 1 + lfo1 * 0.04 + lfo1a * 0.04)
   translate(0, 1 + lfo1 * 15 + lfo1a * 15);
   // image(myImage, width/2 - myImage.width/2, height/2 - myImage.height/2 + Math.sin(t*0.4*targetV/300 - Math.PI) * 3);
+
+  // filter(INVERT);
+  if (targetV <= 0) {
+    background(targetV <= 0 ? "white" : getComputedStyle(document.body).getPropertyValue('--bg'));
+  }
   image(myImage, width/2 - myImage.width/2, height/2 - myImage.height/2);
 
-  if (playing) {
+  if (targetV <= 0) {
+    filter(INVERT);
   }
-
-    t = t + deltaTime * rate;
-    // t = t + deltaTime * timeMultiplier;
+  // blendMode(MULTIPLY);
 }
 
