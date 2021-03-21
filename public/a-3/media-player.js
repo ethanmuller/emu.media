@@ -262,19 +262,19 @@ function draw() {
   translate(666, 666);
   rotate(lfo1a)
   translate(-666, -666);
-  scale(1, 1 + lfo1 * 0.04 + lfo1a * 0.04)
+  scale(1, 1 + lfo1 * 0.04 + lfo1a * 0.02)
   translate(0, 1 + lfo1 * 15 + lfo1a * 15);
   // image(myImage, width/2 - myImage.width/2, height/2 - myImage.height/2 + Math.sin(t*0.4*targetV/300 - Math.PI) * 3);
 
   // filter(INVERT);
-  if (targetV <= 0) {
-    background(targetV <= 0 ? "white" : getComputedStyle(document.body).getPropertyValue('--bg'));
-  }
+  // if (targetV <= 0) {
+  //   background(targetV <= 0 ? "white" : getComputedStyle(document.body).getPropertyValue('--bg'));
+  // }
   image(myImage, width/2 - myImage.width/2, height/2 - myImage.height/2);
 
-  if (targetV <= 0) {
-    filter(INVERT);
-  }
+  // if (targetV <= 0) {
+  //   filter(INVERT);
+  // }
   // blendMode(MULTIPLY);
 }
 

@@ -35,11 +35,11 @@
       }
 
       body.flip {
-        --bg: black;
-        --fg: red;
+        --bg: red;
+        --fg: black;
         --cta: blue;
         --cta-fg: var(--bg);
-        --nk: white;
+        --nk: black;
         --m-fg: var(--bg);
         --m-bg: var(--nk);
         transform: rotate(180deg) scaleX(-1);
@@ -49,7 +49,7 @@
       }
       body.flip #rateMeter {
         box-shadow: inset 0 0 0 2px var(--nk);
-        background: black;
+        background: red;
       }
       body.flip #rateMeter::-moz-meter-bar {
         background: var(--nk);
