@@ -2,7 +2,6 @@ let mySound;
 let playing = false;
 let easing = 0.1;
 let rateInc = 10;
-let t = 0;
 const imageScale = 0.2;
 
 let bpm = 140;
@@ -17,8 +16,8 @@ let fpms = fps / 1000;
 
 let timeMultiplier = 0.055;
 
-let  min = -300;
-let  max = 300;
+let  min = 50;
+let  max = 200;
 let  targetV = 100;
 let  v = targetV;
 
@@ -57,17 +56,12 @@ function handleFlip() {
 }
 
 function speedUp() {
-  targetV = targetV + rateInc;
+  targetV = Math.max(Math.min(targetV + rateInc, max), min);
   if (Math.abs(targetV) < rateInc) {
     targetV = rateInc;
   }
   handleFlip();
   rateMeter.setAttribute("value", targetV);
-  // frameRate(fps);
-
-
-  // art.style.animationDuration =
-  //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
 
   if (mySound.isPlaying()) {
     // need to do this or ios safari won't update speed
@@ -83,27 +77,10 @@ function speedUp() {
   } else {
     document.body.classList.remove("reverse");
   }
-
-  // if (targetV === 300) {
-  //   var t = setInterval(function() {
-  //     if (window.goatcounter && window.goatcounter.count) {
-  //       clearInterval(t);
-  //       goatcounter.count({
-  //         event: true,
-  //         path: "omg-max-speed"
-  //       });
-  //     }
-  //   }, 100);
-  // }
 }
 
 function slowDown() {
-    // t = t - deltaTime * timeMultiplier * 5;
-    targetV = targetV - rateInc;
-
-  if (Math.abs(targetV) < rateInc) {
-    targetV = -rateInc;
-  }
+    targetV = Math.max(Math.min(targetV - rateInc, max), min);
 
     handleFlip();
     rateMeter.setAttribute("value", targetV);
@@ -119,12 +96,6 @@ function slowDown() {
       //   0
       // );
     }
-
-    // if (targetV < 0) {
-    //   document.body.classList.add("reverse");
-    // } else {
-    //   document.body.classList.remove("reverse");
-    // }
 }
 
 function setup() {
@@ -244,7 +215,9 @@ function audioUpdate() {
   newPos = mySound.currentTime() / mySound.duration();
 
   if (newPos !== 0) {
-    pos = newPos;
+    // smooth pos
+    let dp = pos - newPos;
+    pos = pos - dp * 0.2;
   }
 
   targetV = Math.min(Math.max(targetV, -300), 300);
@@ -264,61 +237,45 @@ function draw() {
 
   noStroke();
   fill(209, 209, 236);
-  // scale(1, 1 + Math.sin(t*0.4*targetV/300 - Math.PI/3) * 0.0125);
-  // scale(1, 1 + Math.sin(t*0.4*targetV/300 - Math.PI/3) * 0.125);
-  // scale(1, 1);
-  // const s = 0.5;
-  // scale(0.5);
   const rate = map(targetV, min, max, -3, 3)
-  t = t + deltaTime * rate;
-  const playMod = playing ? 0.2 : 0.1;
-  const lfo1  = Math.sin(t * Math.PI * bpms * rate / 4 * 4 + Math.PI / 2 - Math.PI * 0.3) * playMod;
-  const lfo1a = Math.sin(t * Math.PI * bpms * rate     * 2 + Math.PI / 2 - Math.PI * 0.3) * playMod;
-  const lfo2  = Math.sin(t * Math.PI * bpms * rate * 2);
+
+  image(waves, width - waves.width, -waves.height * pos + playheadOffset);
+
+  blendMode(DIFFERENCE)
+  fill('white');
+  rect(0, playheadOffset, width, 3);
+  blendMode(BLEND)
+
+  let LFOSway  = Math.sin((Math.PI * pos * 64 + Math.PI/2 * Math.PI/2*0.3));
+
+  let bopMult = 0;
+  let juiceMult = 0;
+
+  if ((pos > 0.25 && pos < 0.72656) || pos >= 0.9375) {
+    bopMult = 1;
+  }
+
+  if (pos >= 0.75 && pos < 0.9375) {
+    juiceMult = 1;
+  }
+
+  let LFOBop = Math.sin((Math.PI * pos * 64 * 8 + Math.PI/2 * 0.3)) * bopMult;
+
+  let LFOJuiceA = Math.sin((Math.PI * pos * 64 * 4 + Math.PI/2 * Math.PI/2*0.1)) * juiceMult;
+  let LFOJuiceB = Math.cos((Math.PI * pos * 64 * 4 + Math.PI/2 * Math.PI/2*0.1)) * juiceMult;
+
+  // calibration circle
+  // let lfoC = Math.sin((Math.PI * pos * 64 * 4 + Math.PI/2));
+  // circle(width/2 + width / 2 * lfoC, height/2 + height/2 * lfoC, 100);
+
+  // LFOSway  = 0
+  // lfo1a = 0
 
 
   angleMode(DEGREES); 
-  translate(-666, -666);
-  rotate(lfo1a * 0.1)
-  translate(666, 666);
-  scale(1, 1 + lfo1 * 0.02 + lfo1a * 0.01)
-  translate(0, 1 + lfo1 * 15 + lfo1a * 3);
-
-
-  if (playing) {
-    // stroke(getComputedStyle(document.body).getPropertyValue('--fg'));
-    // noFill();
-    // circle(width - 10,  25, 10);
-    // circle(width - 10,  map(0.25, 0, 1, 25, height-25), 5);
-    // circle(width - 10,  map(0.5, 0, 1, 25, height-25), 5);
-    // circle(width - 10,  map(0.75, 0, 1, 25, height-25), 5);
-    // circle(width - 10,  height - 25, 10);
-    // noStroke();
-    // fill(getComputedStyle(document.body).getPropertyValue('--fg'));
-    // circle(width - 10,  map(pos, 0, 1, 25, height-25), 10);
-
-    // shift into canvas, related to rotation
-    // translate(waves.height, 0);
-
-    // anchor to right side
-    // translate(width - waves.height, 0);
-    // shift to playhead
-    // translate(0, playheadOffset);
-    // shift to play position
-    // translate(0, -waves.height * pos);
-    // rotate(90);
-
-  // blendMode(MULTIPLY)
-  // rect(0, playheadOffset, width, 3);
-    image(waves, width - waves.width, -waves.height * pos + playheadOffset);
-  // blendMode(BLEND)
-
-    blendMode(DIFFERENCE)
-    fill('white');
-    rect(0, playheadOffset, width, 3);
-    blendMode(BLEND)
-  }
-
-  image(head, 0, 0);
+  translate(head.width * 0.3, head.height/2);
+  rotate(LFOSway - LFOJuiceA * 8)
+  translate(-head.width * 0.3, -head.height/2);
+  image(head, -20 + LFOBop * 2 + LFOJuiceA * 12, 10 + LFOSway * 5 + LFOJuiceB * 20);
 }
 
