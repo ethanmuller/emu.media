@@ -42,6 +42,8 @@
         --nk: black;
         --m-fg: var(--bg);
         --m-bg: var(--nk);
+      }
+      body.flip main {
         transform: rotate(180deg) scaleX(-1);
       }
       body.flip canvas {
@@ -62,6 +64,14 @@
 
       body {
         /* overflow: hidden; */
+        flex-direction: column;
+        justify-content: flex-start;
+      }
+      article {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
       }
 
       @keyframes load-bob {
@@ -87,6 +97,12 @@
       .tag {
         top: 0;
       }
+      body.flip .tag {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        transform: rotate(180deg);
+      }
 
       #controls {
         /* position: absolute; */
@@ -103,6 +119,11 @@
         transform: translate3D(-50%, 0, 0);
         /* flex-direction: column; */
         /* width: 4.5rem; */
+      }
+      body.flip #controls {
+        transform: translate3D(-50%, 0, 0) scale(-1);
+        bottom: auto;
+        top: 1rem;
       }
 
       #controls button {
@@ -152,12 +173,12 @@
 
       #rate::before {
         left: 0;
-        content: "-300%";
+        content: "-666%";
       }
 
       #rate::after {
         left: 100%;
-        content: "+300%";
+        content: "+666%";
       }
 
       #rate button:first-of-type::before {
@@ -226,6 +247,38 @@
       h1 {
 
       }
+      section {
+        min-height: 50vh;
+        background: white;
+        align-self: stretch;
+        padding: 1rem 1rem 12rem;
+      }
+      body.flip section {
+        background: black;
+        color: red;
+      }
+      body .flip-msg {
+        display: none;
+      }
+      body .msg {
+        display: block;
+      }
+      body.flip .flip-msg {
+        display: block;
+      }
+      body.flip .msg {
+        display: none;
+      }
+      pre {
+        font-size: 0.8rem;
+      }
+      h1, h2 {
+        font-size: inherit;
+        font-weight: normal;
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+      }
     </style>
 
   </head>
@@ -263,16 +316,30 @@
 </a>
     </header>
 
-    <main>
-      <article>
+    <article>
+      <main>
+        
         <img id="cover" src="./a-3.png" alt="satanic lookin dude. floating head. all kind of eyes (or slits) all over his face." />
-        <audio controls src="./a-3.wav" id="audio"></audio>
+        <audio controls src="./loop.mp3" id="loop"></audio>
+        <audio hidden controls src="./scare.mp3" id="scare"></audio>
+        
+        
+      </main>
         <div id="controls"></div>
+    </article>
+    <section>
+<pre><h1>minus world</h1>
 
-      </article>
+<span class="msg">DO NOT go below 0%!!!!!
 
-    </main>
+your browser will probably glitch out.
 
+some browsers flip out when you try to play
+audio at a rate near or below 0%. not sure why.</span><span class="flip-msg">y̤͍o̼̙̘̘̦͉u̠̼͘ ̙̤͉̫͓͎͕͠s̬͉͎͎̝h̭o̵͕͇u͍̺̫̭͞l̦d̟̤̤̻͕̪̤n͞'t͎̯͉͉͈̖̯͞ ̴̝͍̹̮̳̪h̗̀á̪̮v̺̹ę c̛̝o̬̪m̩͉̭̣̯é͖̳̪ ̖͕̠̯̞h̷͇̦ẹͅr̖̦͔̘͈̪̪͜e̼̦͙͓</span>
+
+</pre>
+    </section>
+    
     <script src="p5.js"></script>
     <script src="p5.sound.js"></script>
     <script src="media-player.js"></script>

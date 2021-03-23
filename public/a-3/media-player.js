@@ -16,22 +16,27 @@ let fpms = fps / 1000;
 
 let timeMultiplier = 0.055;
 
-let  min = -300;
-let  max = 300;
+let  min = -666;
+let  max = 666;
 let  targetV = 100;
 let  v = targetV;
 
+const portalToHell = "http://forklore.emu.media/p/5fd1d1d6ef945b43977dd9d4";
+
 function preload() {
-  const audioEl = document.querySelector('#audio');
+  const audioEl = document.querySelector('#loop');
+  audioEl.hidden = true;
   const audioUrl = audioEl.src;
+
+  const scareUrl = document.querySelector('#scare').src;
 
   const imgEl = document.querySelector('#cover');
   const imgUrl = imgEl.src;
 
-  audioEl.hidden = true;
   myImage = loadImage(imgUrl);
 
-  mySound = loadSound(audioUrl);
+  loop = loadSound(audioUrl);
+  scare = loadSound(scareUrl);
 
   clickA = loadSound(
     "https://cdn.glitch.com/0dc0bcbe-e4c8-44c2-8133-b1249eaa273b%2Fclick-b.mp3?v=1600992753524"
@@ -55,19 +60,10 @@ function speedUp() {
   }
   handleFlip();
   rateMeter.setAttribute("value", targetV);
-  // frameRate(fps);
 
-
-  // art.style.animationDuration =
-  //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
-
-  if (mySound.isPlaying()) {
-    // need to do this or ios safari won't update speed
-    // art.style.animationPlayState = "paused";
-    // window.setTimeout(
-    //   () => (art.style.animationPlayState = "running"),
-    //   0
-    // );
+  targetV = Math.min(targetV, max);
+  if (targetV === max) {
+    window.location = portalToHell;
   }
 
   if (targetV < 0) {
@@ -75,18 +71,6 @@ function speedUp() {
   } else {
     document.body.classList.remove("reverse");
   }
-
-  // if (targetV === 300) {
-  //   var t = setInterval(function() {
-  //     if (window.goatcounter && window.goatcounter.count) {
-  //       clearInterval(t);
-  //       goatcounter.count({
-  //         event: true,
-  //         path: "omg-max-speed"
-  //       });
-  //     }
-  //   }, 100);
-  // }
 }
 
 function slowDown() {
@@ -94,16 +78,25 @@ function slowDown() {
     targetV = targetV - rateInc;
 
   if (Math.abs(targetV) < rateInc) {
+    // skip over zero
     targetV = -rateInc;
+
+    scare.play();
   }
+  targetV = Math.max(targetV, min);
+
+  if (targetV === min) {
+    window.location = portalToHell;
+  }
+  console.log(targetV)
 
     handleFlip();
     rateMeter.setAttribute("value", targetV);
 
     // art.style.animationDuration =
-    //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
+    //   Math.abs(loop.duration() / (targetV / 100) / 2) + "s";
 
-    if (mySound.isPlaying()) {
+    if (loop.isPlaying()) {
       // need to do this or ios safari won't update speed
       // art.style.animationPlayState = "paused";
       // window.setTimeout(
@@ -159,15 +152,15 @@ function setup() {
   playbtn.elt.setAttribute("aria-label", "play/pause");
   playbtn.mouseClicked(() => {
     playbtn.elt.classList.remove("throb");
-    if (mySound.isPlaying()) {
-      mySound.stop();
+    if (loop.isPlaying()) {
+      loop.stop();
       playing = false;
       // art.style.animationPlayState = "paused";
     } else {
-      mySound.loop();
+      loop.loop();
       playing = true;
       // art.style.animationDuration =
-      //   Math.abs(mySound.duration() / (targetV / 100) / 2) + "s";
+      //   Math.abs(loop.duration() / (targetV / 100) / 2) + "s";
       // art.style.animationPlayState = "running";
     }
   });
@@ -227,7 +220,7 @@ function setup() {
 }
 
 function audioDraw() {
-  targetV = Math.min(Math.max(targetV, -300), 300);
+  targetV = Math.min(Math.max(targetV, min), max);
   dv = targetV - v;
   v += dv * easing;
   if (Math.abs(v) < 0.001) {
@@ -235,7 +228,7 @@ function audioDraw() {
   }
 
   const playbackRate = v / 100;
-  mySound.rate(playbackRate);
+  loop.rate(playbackRate);
 }
 
 function draw() {

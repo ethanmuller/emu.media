@@ -67,6 +67,23 @@
         /* right: 4rem; */
       }
 
+      section {
+        min-height: 50vh;
+        background: white;
+        align-self: stretch;
+        padding: 1rem 1rem 12rem;
+      }
+      pre {
+        font-size: 0.8rem;
+      }
+      h1, h2 {
+        font-size: inherit;
+        font-weight: normal;
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+      }
+
       .tag {
         top: 0;
         position: relative;
@@ -76,7 +93,6 @@
       display: grid;
       grid-template-columns: 1fr auto;
       grid-template-rows: 1fr auto;
-      min-height: calc(100vh - 100px);
       /* min-height: 100vh; */
       }
 
@@ -88,26 +104,36 @@
       }
 
       main {
-        min-height: 10em;
+        /* min-height: 10em; */
         grid-row: 1;
         grid-column: 1;
         align-self: stretch;
+
+        /* this is roughly accounting for mobile browser chrome */
+        min-height: calc(100vh - 160px);
 
         display: flex;
         align-items: flex-start;
 
         max-width: 35rem;
+        position: sticky;
+        top: 0;
       }
 
       article {
       }
 
       #controls {
+        position: relative;
+
         grid-column: 1 / -1;
         display: flex;
       
         bottom: 1rem;
         padding: 0 0.5rem;
+        margin-bottom: 1rem;
+
+        /* margin-top: 3rem; */
 
         /* width: 100%; */
         /* max-width: 45rem; */
@@ -240,6 +266,18 @@
       h1 {
 
       }
+      section {
+        position: relative;
+        grid-column: 1 / -1;
+        display: flex;
+
+        /* min-height: 50vh; */
+        background: white;
+        padding: 1rem 1rem 12rem;
+      }
+      pre {
+        font-size: 0.8rem;
+      }
     </style>
 
   </head>
@@ -283,6 +321,25 @@
         <audio controls src="audio.wav" id="audio"></audio>
       </main>
       <div id="controls"></div>
+      <section>
+<pre><h1>sensorium</h1>
+sound is different from images
+because an image can bee seen in an instant,
+but sound requires you to travel through time
+in order to experience it.
+
+if a picture is worth 1000 words,
+how much information is contained
+in a 1:49 mp3 file at a sample rate of 44100 @ 320kbps?
+
+outside of record players and some tape machines,
+our sound-playing devices don't let us play with
+the rate at which we experience their sound-playing.
+
+but why not? it's fun.
+and listening to audio at a rate other than 100%
+helps you hear it with fresh ears.</pre>
+      </section>
     </article>
 
     <script src="p5.js"></script>

@@ -18,14 +18,14 @@ let timeMultiplier = 0.055;
 
 let  min = 50;
 let  max = 200;
-let  targetV = 100;
+let  targetV = 90;
 let  v = targetV;
 
 let pg;
 
 let pos = 0;
 
-let playheadOffset = 150;
+let playheadOffset = 156;
 
 function preload() {
   const audioEl = document.querySelector('#audio');
@@ -243,7 +243,7 @@ function draw() {
 
   blendMode(DIFFERENCE)
   fill('white');
-  rect(0, playheadOffset, width, 3);
+  rect(0, playheadOffset, width, 7);
   blendMode(BLEND)
 
   let LFOSway  = Math.sin((Math.PI * pos * 64 + Math.PI/2 * Math.PI/2*0.3));
@@ -256,7 +256,7 @@ function draw() {
   }
 
   if (pos >= 0.75 && pos < 0.9375) {
-    juiceMult = 1;
+    juiceMult = 0.5;
   }
 
   let LFOBop = Math.sin((Math.PI * pos * 64 * 8 + Math.PI/2 * 0.3)) * bopMult;
