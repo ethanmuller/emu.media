@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <title>A-4 :: emu.media</title>
+
+    <!-- this prevents a dorky zoomed-out page on mobile -->
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+    <!-- this tells the browser which characters we're using -->
+    <meta charset="UTF-8"> 
+
+    <!-- this gets us nice fonts -->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300&display=swap" rel="stylesheet"> 
+
+    <!-- favicon links -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+
+    <!-- global styles -->
+    <link href="/global.css" rel="stylesheet">
+
+    <!-- page styles -->
+    <style>
+      :root {
+        --bg: #0034ff;
+        --fg: #000;
+        --text: black;
+        --cta: #ff0000;
+      }
+      img {
+        width: 45rem;
+      }
+      img:first-child {
+        position: absolute;
+      }
+      audio {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        /* overflow: hidden; */
+        flex-direction: column;
+        justify-content: flex-start;
+
+
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+      }
+      article {
+            min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      section {
+        min-height: 50vh;
+        background: white;
+        align-self: stretch;
+        padding: 1rem 1rem 12rem;
+      }
+      pre {
+        font-size: 0.8rem;
+      }
+
+      @keyframes load-bob {
+        from {
+          transform: translate3d(0, -5px, 0);
+        }
+        to {
+          transform: translate3d(0, 5px, 0);
+        }
+      }
+
+      #p5_loading {
+        font-size: 1rem;
+        color: white;
+        background: black;
+        padding: 1rem;
+        animation: load-bob 0.2s ease-out infinite;
+        bottom: 50%;
+        /* top: 50%; */
+        /* right: 4rem; */
+      }
+
+      .tag {
+        top: 0;
+      }
+
+      #controls {
+        /* position: absolute; */
+        /* transform: rotate(-90deg); */
+        /* right: 0.5rem; */
+        /* top: 50%; */
+        display: flex;
+        position: fixed;
+        bottom: 1rem;
+        padding: 0 0.5rem;
+        width: 100%;
+        /* max-width: 45rem; */
+        left: 50%;
+        transform: translate3D(-50%, 0, 0);
+        /* flex-direction: column; */
+        /* width: 4.5rem; */
+      }
+
+      #controls button {
+        /* padding: 2rem 0; */
+        /* margin: 0.5rem 0; */
+
+        padding: 1rem 0.5rem;
+        margin: 0 0.5rem;
+        /* margin: 0 0.5rem; */
+
+        border: none;
+        border-radius: 0.75rem;
+
+        color: white;
+        background: var(--fg);
+        box-shadow: 0px 100px 80px rgba(0, 0, 0, 0.07), 0px 41.7776px 33.4221px rgba(0, 0, 0, 0.0503198), 0px 22.3363px 17.869px rgba(0, 0, 0, 0.0417275), 0px 12.5216px 10.0172px rgba(0, 0, 0, 0.035), 0px 6.6501px 5.32008px rgba(0, 0, 0, 0.0282725), 0px 2.76726px 2.21381px rgba(0, 0, 0, 0.0196802);
+        /* border-radius: 20px; */
+        border: 2px solid #fbf4f40d;
+
+        font-size: 1.2rem;
+        letter-spacing: 0.25em;
+      }
+
+      #controls button:active {
+        /* transform: scale(0.98); */
+      }
+
+      #rate {
+        display: flex;
+        margin: 0 0.5rem;
+
+        position: relative;
+
+        padding-bottom: 1rem;
+
+
+        display: none;
+      }
+
+      #rate::before,
+      #rate::after,
+      #rate button:first-of-type::before {
+        position: absolute;
+        bottom: -1em;
+        font-size: 0.7rem;
+        transform: rotate(-90deg);
+        transform-origin: 0 50%;
+        letter-spacing: 0.5em;
+        color: var(--fg);
+      }
+
+      #rate::before {
+        left: 0;
+        content: "-666%";
+      }
+
+      #rate::after {
+        left: 100%;
+        content: "+666%";
+      }
+
+      #rate button:first-of-type::before {
+        bottom: 0;
+        left: 50%;
+        bottom: 1em;
+        content: "0%"
+      }
+
+      #rateMeter {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        width: calc(100% - 1rem);
+        height: 0.5rem;
+        margin-bottom: -0.25rem;
+        transform: translateX(-50%);
+        -moz-appearance: none;
+
+        background: var(--nk);
+      }
+      #rateMeter::-moz-meter-bar {
+        background: var(--bg);
+        box-shadow: inset 0 0 0 2px var(--nk);
+      }
+
+      .throb {
+        animation: load-bob 2s ease-out infinite alternate-reverse;
+        background: green !important;
+        color: white !important;
+      }
+      #play {
+      }
+
+      #rate button:first-of-type {
+      }
+
+      #play {
+        width: 13rem;
+        margin-left: auto !important;
+        color: white;
+}    
+
+      canvas {
+        width: 80vmin !important;
+        height: 80vmin !important;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(-360deg);
+        }
+      }
+      img {
+
+        /* animation: spin 120s linear infinite; */
+      }
+      audio {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+      }
+      h1, h2 {
+        font-size: inherit;
+        font-weight: normal;
+        margin: 0;
+        text-transform: uppercase;
+        display: inline;
+        /* letter-spacing: 0.2em; */
+      }
+    </style>
+
+  </head>
+
+  <body>
+    <header class="tag">
+      <p class="label">A-4</p>
+      <a href="/">
+        <svg width="190" height="375" viewBox="0 0 190 375" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="190" height="375" class="bg"/>
+<path d="M168.74 76.2005C168.74 92.0016 163.481 104.319 152.962 113.151C142.443 121.984 127.692 126.401 108.709 126.401L71.1674 126.401L71.1674 91.6581L107.44 91.6581C116.75 91.6581 123.52 90.3331 127.752 87.6833C131.984 84.9352 134.1 81.0095 134.1 75.906C134.1 70.8026 131.984 66.9259 127.752 64.276C123.52 61.528 116.75 60.154 107.44 60.154L71.1674 60.154L71.1674 26L108.709 26C127.692 26 142.443 30.4164 152.962 39.2494C163.481 48.0823 168.74 60.3993 168.74 76.2005Z" fill="currentColor"/>
+<path d="M141.82 262.679L165.912 262.679L165.912 347L71.1674 347L71.1674 262.203L95.2595 262.203L95.2595 326.5L106.358 326.5L106.358 262.554L129.368 262.554L129.368 326.5L141.82 326.5L141.82 262.679Z" fill="currentColor"/>
+<path d="M165.912 169.068L122.735 169.307L145 190.475L145 196.905L124.224 218.073L165.912 218.073L165.912 243.771L71.1674 243.771L71.1674 220.583L98.9999 193.331L71.1674 166.797L71.1674 143.609L165.912 143.37L165.912 169.068Z" fill="currentColor"/>
+<path d="M30.4589 159.186L30.4589 161.581L42.8954 161.581L42.8954 159.186L37.8531 159.186L37.8531 156.395L42.8954 156.395L42.8954 154L30.4589 154L30.4589 156.395L35.6616 156.395L35.6616 159.186L30.4589 159.186Z" fill="currentColor"/>
+<path d="M40.7039 173.263L42.8954 173.263L42.8954 164.509L40.7039 164.509L40.7039 167.697L30.4589 167.697L30.4589 170.076L40.7039 170.076L40.7039 173.263Z" fill="currentColor"/>
+<path d="M40.7039 184.359L42.8954 184.359L42.8954 175.605L40.7039 175.605L40.7039 178.792L30.4589 178.792L30.4589 181.171L40.7039 181.171L40.7039 184.359Z" fill="currentColor"/>
+<path d="M30.4589 189.92L34.9845 189.92L34.9845 191.807C34.9845 193.98 36.5346 195.201 38.94 195.201C41.3453 195.201 42.8954 193.98 42.8954 191.807L42.8954 187.525L30.4589 187.525L30.4589 189.92ZM40.7395 189.92L40.7395 191.204C40.7395 192.315 40.2941 192.695 39.2072 192.695L38.6727 192.695C37.5859 192.695 37.1404 192.315 37.1404 191.204L37.1404 189.92L40.7395 189.92Z" fill="currentColor"/>
+<path d="M30.2451 201.999C30.2451 204.774 31.9556 206.233 34.2897 206.233C36.2496 206.233 37.4255 205.202 37.7819 203.426L38.0135 202.268C38.2273 201.19 38.6015 200.746 39.4567 200.746C40.4366 200.746 40.9355 201.285 40.9355 202.348C40.9355 203.347 40.4901 204.172 39.7596 204.758L41.4522 206.106C42.4678 205.329 43.1093 204.029 43.1093 202.332C43.1093 199.826 41.7195 198.351 39.332 198.351C37.5146 198.351 36.1427 199.192 35.7685 201.174L35.5547 202.332C35.3587 203.41 34.9489 203.823 34.0758 203.823C33.0068 203.823 32.4188 203.204 32.4188 202.078C32.4188 201.095 32.8821 200.096 33.8799 199.287L32.1694 197.907C30.9934 198.747 30.2451 200.159 30.2451 201.999Z" fill="currentColor"/>
+<path d="M30.2451 213.269C30.2451 214.458 30.9222 214.934 31.724 214.934L32.3476 214.934C33.1493 214.934 33.8264 214.458 33.8264 213.269C33.8264 212.079 33.1493 211.604 32.3476 211.604L31.724 211.604C30.9222 211.604 30.2451 212.079 30.2451 213.269ZM36.2852 213.269C36.2852 214.458 36.9623 214.934 37.764 214.934L38.3876 214.934C39.1894 214.934 39.8665 214.458 39.8665 213.269C39.8665 212.079 39.1894 211.604 38.3876 211.604L37.764 211.604C36.9623 211.604 36.2852 212.079 36.2852 213.269Z" fill="currentColor"/>
+<path d="M28.0001 222.874L44.0001 227.965L44.0001 225.855L28.0001 220.764L28.0001 222.874Z" fill="currentColor"/>
+<path d="M28.0001 233.969L44.0001 239.06L44.0001 236.951L28.0001 231.86L28.0001 233.969Z" fill="currentColor"/>
+<path d="M30.4589 250.14L32.6505 250.14L32.6505 245.446L35.6616 245.446L35.6616 249.982L37.8531 249.982L37.8531 245.446L40.7039 245.446L40.7039 250.14L42.8954 250.14L42.8954 243.067L30.4589 243.067L30.4589 250.14Z" fill="currentColor"/>
+<path d="M30.4589 259.729L30.4589 261.791L42.8954 261.791L42.8954 259.174L38.7084 257.81L38.7084 257.683L42.8954 256.319L42.8954 253.512L30.4589 253.512L30.4589 255.574L36.0001 255.574L39.4745 255.447L39.4745 255.59L33.0781 257.652L39.4745 259.713L39.4745 259.856L36.0001 259.729L30.4589 259.729Z" fill="currentColor"/>
+<path d="M42.8954 264.862L35.3765 264.862C31.9734 264.862 30.2451 265.528 30.2451 268.747C30.2451 271.967 31.9734 272.633 35.3765 272.633L42.8954 272.633L42.8954 270.254L35.0202 270.254C33.4344 270.254 32.401 270.143 32.401 268.747C32.401 267.352 33.4344 267.241 35.0202 267.241L42.8954 267.241L42.8954 264.862Z" fill="currentColor"/>
+<path d="M30.2451 279.843C30.2451 281.032 30.9222 281.508 31.724 281.508L32.3476 281.508C33.1493 281.508 33.8264 281.032 33.8264 279.843C33.8264 278.653 33.1493 278.178 32.3476 278.178L31.724 278.178C30.9222 278.178 30.2451 278.653 30.2451 279.843Z" fill="currentColor"/>
+<path d="M30.4589 293.016L30.4589 295.078L42.8954 295.078L42.8954 292.461L38.7084 291.097L38.7084 290.97L42.8954 289.606L42.8954 286.799L30.4589 286.799L30.4589 288.861L36.0001 288.861L39.4745 288.734L39.4745 288.877L33.0781 290.939L39.4745 293L39.4745 293.143L36.0001 293.016L30.4589 293.016Z" fill="currentColor"/>
+<path d="M30.4589 305.619L32.6505 305.619L32.6505 300.924L35.6616 300.924L35.6616 305.46L37.8531 305.46L37.8531 300.924L40.7039 300.924L40.7039 305.619L42.8954 305.619L42.8954 298.545L30.4589 298.545L30.4589 305.619Z" fill="currentColor"/>
+<path d="M30.4589 309.387L30.4589 312.956C30.4589 315.921 32.6861 317.349 36.6772 317.349C40.6683 317.349 42.8954 315.921 42.8954 312.956L42.8954 309.387L30.4589 309.387ZM32.5614 311.734L40.793 311.734L40.793 312.797C40.793 314.208 39.7418 314.843 37.8175 314.843L35.5547 314.843C33.6126 314.843 32.5614 314.208 32.5614 312.797L32.5614 311.734Z" fill="currentColor"/>
+<path d="M30.4589 327.794L32.4366 327.794L32.4366 325.415L40.9177 325.415L40.9177 327.794L42.8954 327.794L42.8954 320.657L40.9177 320.657L40.9177 323.036L32.4366 323.036L32.4366 320.657L30.4589 320.657L30.4589 327.794Z" fill="currentColor"/>
+<path d="M30.4589 340L42.8954 337.002L42.8954 333.64L30.4589 330.643L30.4589 333.053L33.4522 333.735L33.4522 336.765L30.4589 337.462L30.4589 340ZM35.6081 336.4L35.6081 334.116L40.3119 335.194L40.3119 335.321L35.6081 336.4Z" fill="currentColor"/>
+<circle cx="36" cy="43" r="19" fill="currentColor"/>
+<circle cx="36" cy="110" r="19" fill="currentColor"/>
+</svg>
+
+</a>
+    </header>
+
+    <article>
+      <main>
+        
+          <img id="imgB" src="imgB.png" alt="">
+        </audio>
+      </main>
+      <div id="controls"></div>
+    </article>
+    <section>
+      <pre>
+ay pudge lemme get a <h1>OWA OWA</h1>
+
+yessirski
+
+gimme a kiss
+</pre>
+    </section>
+    
+    <script src="p5.js"></script>
+    <script src="p5.sound.js"></script>
+    <script src="media-player.js"></script>
+  </body>
+</html>
