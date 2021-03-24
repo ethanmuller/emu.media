@@ -48,8 +48,10 @@ function preload() {
 
 function handleFlip() {
   if (targetV <= 0) {
+    document.title = `◖˥ᴚOM S∩NIW`;
     return document.body.classList.add("flip");
   }
+    document.title = `MINUS WORLD`;
     return document.body.classList.remove("flip");
 }
 
