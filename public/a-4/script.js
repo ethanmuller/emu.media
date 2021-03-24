@@ -6,6 +6,7 @@ let pressed; // :(
 let owaCounter = 0;
 let gruntCounter = 0;
 let gruntTimer;
+let flip = 1;
 
 function preload() {
 
@@ -45,6 +46,8 @@ function down(e) {
   lastDown = Date.now();
   lastSound = Date.now();
   pressed = true;
+
+  flip = flip * -1;
 }
 
 function up(e) {
@@ -99,7 +102,9 @@ function draw() {
 
   translate(myImage.width, myImage.height);
   scale(1 + Math.random()*0.025);
+  // scale(flip, 1);
   translate(-myImage.width, -myImage.height);
+
 
   translate(Math.random()*4, Math.random()*2);
 
