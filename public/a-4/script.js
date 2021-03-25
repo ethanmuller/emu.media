@@ -69,6 +69,11 @@ function setup() {
 
   cnv = createCanvas(666, 666);
 
+  cnv.elt.addEventListener('touchstart', down)
+  cnv.elt.addEventListener('mousedown', down)
+  cnv.elt.addEventListener('touchend', up)
+  cnv.elt.addEventListener('mouseup', up)
+
   playbtn = createButton('OWA OWA');
   playbtn.elt.id = "play";
   playbtn.elt.addEventListener('touchstart', down)
