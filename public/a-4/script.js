@@ -10,8 +10,8 @@ let flip = 1;
 
 function preload() {
 
-  myImage = loadImage('./img.png');
-  myImageB = loadImage('./imgB.png');
+  myImage = loadImage('./owaowa1.png');
+  myImageB = loadImage('./owaowa2.png');
 
   owaTuples = [
     [loadSound('./a.mp3'), loadSound('./b.mp3')],
@@ -74,7 +74,7 @@ function setup() {
   cnv.elt.addEventListener('touchend', up)
   cnv.elt.addEventListener('mouseup', up)
 
-  playbtn = createButton('OWA OWA');
+  playbtn = createButton('OWA OWA ⚡');
   playbtn.elt.id = "play";
   playbtn.elt.addEventListener('touchstart', down)
   playbtn.elt.addEventListener('mousedown', down)
@@ -106,7 +106,7 @@ function draw() {
   }
 
   translate(myImage.width, myImage.height);
-  scale(1 + Math.random()*0.025);
+  scale(1 + Math.random()*0.0125);
   // scale(flip, 1);
   translate(-myImage.width, -myImage.height);
 
