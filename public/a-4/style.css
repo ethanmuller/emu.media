@@ -232,6 +232,16 @@ section a {
   transform: scale(1.1) !important;
 }
 
+path:nth-child(3) { /* selects E */
+transform: translate3d(50px, 233px, 0) scale(-1);
+transform-origin: 50%;
+}
+
+path:nth-child(4) { /* selects M */
+transform: translate3d(50px, 12px, 0) scale(-1);
+transform-origin: 50%;
+}
+
 .plus {
   display: block;
   text-align: center;
