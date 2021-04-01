@@ -25,7 +25,7 @@ let pg;
 
 let pos = 0;
 
-let playheadThickness = 10;
+let playheadThickness = 3;
 let playheadOffset = 156;
 
 function preload() {
@@ -100,7 +100,7 @@ function slowDown() {
 }
 
 function setup() {
-  // frameRate(fps);
+  frameRate(fps);
   head.resize(240, 0)
   // waves.resize(waves.width, 64*64*2*2)
 
@@ -237,26 +237,30 @@ function audioUpdate() {
 function draw() {
   clear();
   audioUpdate();
-textSize(12);
+  translate(0, map(v, min, max, -100, 100));
+  textSize(12);
   fill('black');
   textFont('IBM Plex Mono');
-  text(`RATE: ${Math.round(v)}%`, 10, playheadOffset - (100 - v));
+  text(`RATE: ${Math.round(v)}%`, 10, playheadOffset);
 
 fill(0, 102, 153);
 
   noStroke();
   const rate = map(targetV, min, max, -3, 3)
 
-  image(waves, width - waves.width, -waves.height * pos + playheadOffset - (100 - v));
+
+  // translate(0, );
+  // scale(1, map(v, min, max, 3, 0.8));
+  image(waves, width - waves.width, -waves.height * pos + playheadOffset);
   // fill('#FFD400bb');
   // rect(width - waves.width, playheadOffset - playheadThickness - 20, waves.width, height);
 
-  blendMode(DIFFERENCE)
+  blendMode(MULTIPLY)
   fill('white');
-  rect(0, playheadOffset - playheadThickness - 20 - (100 - v), width, playheadThickness);
+  rect(0, playheadOffset - playheadThickness - 20, width, playheadThickness);
   blendMode(BLEND)
 
-  let LFOSway  = Math.sin((Math.PI * pos * 64 * 5 / 2  + Math.PI/2 * Math.PI/2*0.3));
+  let LFOSway  = Math.sin((Math.PI * pos * 64 * 5 / 4  + Math.PI/2 * Math.PI/2*0.3)) * 0.2;
 
   let bopMult = 0;
   let juiceMult = 0;
@@ -278,7 +282,10 @@ fill(0, 102, 153);
   translate(head.width * 0.3, head.height/2);
   rotate(LFOSway - LFOJuiceA * 8)
   translate(-head.width * 0.3, -head.height/2);
-  image(head, -20 + LFOBop * 2 + LFOJuiceA * 12, 10 + LFOSway * 5 + LFOJuiceB * 20);
+  // translate(0, -head.height);
+
+  image(head, -20 + LFOBop * 2 + LFOJuiceA * 12, playheadOffset - head.height * 1.3 + map(v,min,max,-40,20) + LFOSway * 5 + LFOJuiceB * 20);
+
 
 }
 
