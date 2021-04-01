@@ -89,6 +89,8 @@ pre {
   transform: translate3D(-50%, 0, 0);
   /* flex-direction: column; */
   /* width: 4.5rem; */
+
+  display: none;
 }
 
 #controls button {
@@ -193,6 +195,7 @@ pre {
 canvas {
   width: 80vmin !important;
   height: 80vmin !important;
+  cursor: pointer;
 }
 
 @keyframes spin {

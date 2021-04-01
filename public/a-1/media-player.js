@@ -4,7 +4,7 @@ let easing = 0.1;
 let rateInc = 10;
 const imageScale = 0.2;
 
-let bpm = 140;
+let bpm = 205;
 let bars = 64;
 let bps = bpm / 60;
 let bpms = bps / 1000;
@@ -25,6 +25,7 @@ let pg;
 
 let pos = 0;
 
+let playheadThickness = 10;
 let playheadOffset = 156;
 
 function preload() {
@@ -209,6 +210,8 @@ function setup() {
   // to size this properly, run this code after injecting controls
   const rect = document.querySelector('main').getBoundingClientRect()
   cnv = createCanvas(rect.width, rect.height);
+
+  playheadOffset = height / 2;
 }
 
 function audioUpdate() {
@@ -234,32 +237,31 @@ function audioUpdate() {
 function draw() {
   clear();
   audioUpdate();
+textSize(12);
+  fill('black');
+  textFont('IBM Plex Mono');
+  text(`RATE: ${Math.round(v)}%`, 10, playheadOffset - (100 - v));
+
+fill(0, 102, 153);
 
   noStroke();
-  fill(209, 209, 236);
   const rate = map(targetV, min, max, -3, 3)
 
-  image(waves, width - waves.width, -waves.height * pos + playheadOffset);
+  image(waves, width - waves.width, -waves.height * pos + playheadOffset - (100 - v));
+  // fill('#FFD400bb');
+  // rect(width - waves.width, playheadOffset - playheadThickness - 20, waves.width, height);
 
   blendMode(DIFFERENCE)
   fill('white');
-  rect(0, playheadOffset, width, 7);
+  rect(0, playheadOffset - playheadThickness - 20 - (100 - v), width, playheadThickness);
   blendMode(BLEND)
 
-  let LFOSway  = Math.sin((Math.PI * pos * 64 + Math.PI/2 * Math.PI/2*0.3));
+  let LFOSway  = Math.sin((Math.PI * pos * 64 * 5 / 2  + Math.PI/2 * Math.PI/2*0.3));
 
   let bopMult = 0;
   let juiceMult = 0;
 
-  if ((pos > 0.25 && pos < 0.72656) || pos >= 0.9375) {
-    bopMult = 1;
-  }
-
-  if (pos >= 0.75 && pos < 0.9375) {
-    juiceMult = 0.5;
-  }
-
-  let LFOBop = Math.sin((Math.PI * pos * 64 * 8 + Math.PI/2 * 0.3)) * bopMult;
+  let LFOBop = Math.sin((Math.PI * pos * 80 + Math.PI/2 * 0.3)) * bopMult;
 
   let LFOJuiceA = Math.sin((Math.PI * pos * 64 * 4 + Math.PI/2 * Math.PI/2*0.1)) * juiceMult;
   let LFOJuiceB = Math.cos((Math.PI * pos * 64 * 4 + Math.PI/2 * Math.PI/2*0.1)) * juiceMult;
@@ -277,5 +279,6 @@ function draw() {
   rotate(LFOSway - LFOJuiceA * 8)
   translate(-head.width * 0.3, -head.height/2);
   image(head, -20 + LFOBop * 2 + LFOJuiceA * 12, 10 + LFOSway * 5 + LFOJuiceB * 20);
+
 }
 
