@@ -282,6 +282,30 @@
         display: inline-block;
         padding: 0.5rem 0;
       }
+
+      #fingie {
+position: fixed;
+width: 10rem;
+left: 0;
+top: 0;
+z-index: 2;
+transform: translate(calc(1px * var(--x) - 70px), calc(1px * var(--y) - 20px)) rotate(-45deg);
+
+transform-origin: 0 0;
+filter: drop-shadow(-50px 50px 10px #00000052);
+pointer-events: none;
+transition: top 0.2s ease-out, left 0.3s ease-out, filter 0.2s ease-out;
+/* transition: transform 0.2s ease-out; */
+      }
+      .down #fingie {
+        transition-duration: 0.05s;
+/* left: calc(var(--x) * 1px - 60px); */
+/* top: calc(var(--y) * 1px); */
+/* transform: translate(calc(1px * var(--x) - 60px), calc(1px * var(--y) + 10px)) rotate(-45deg); */
+        left: -20px;
+        top: 20px;
+filter: drop-shadow(-10px 10px 2px #00000052);
+      }
     </style>
 
   </head>
@@ -327,6 +351,7 @@
         <img hidden id="waves" src="notation.png" alt="" />
         <audio controls src="pentagram.wav" id="audio"></audio>
       </main>
+        <img id="fingie" src="fingie.png" alt="" />
       <div id="controls"></div>
       <section>
 <pre><h1>PICTO-TAPE</h1>

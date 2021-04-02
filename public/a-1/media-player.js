@@ -154,12 +154,12 @@ function setup() {
       // art.style.animationPlayState = "running";
     }
   });
-  playbtn.touchStarted(() => {
+  playbtn.mousePressed(() => {
     clickA.setVolume(0.1);
     clickA.stop();
     clickA.play();
   });
-  playbtn.touchEnded(() => {
+  playbtn.mouseReleased(() => {
     clickB.setVolume(0.1);
     clickB.stop();
     clickB.play();
@@ -169,12 +169,12 @@ function setup() {
   sb.elt.id = "slow";
   sb.elt.setAttribute("aria-label", "slow down");
   sb.mouseClicked(slowDown);
-  sb.touchStarted(() => {
+  sb.mousePressed(() => {
     clickA.setVolume(0.1);
     clickA.stop();
     clickA.play();
   });
-  sb.touchEnded(() => {
+  sb.mouseReleased(() => {
     clickB.setVolume(0.1);
     clickB.stop();
     clickB.play();
@@ -194,12 +194,12 @@ function setup() {
   fb.elt.setAttribute("aria-label", "speed up");
   // fb.elt.style.transform = "scaleX(-1)";
   fb.mouseClicked(speedUp);
-  fb.touchStarted(() => {
+  fb.mousePressed(() => {
     clickA.setVolume(0.1);
     clickA.stop();
     clickA.play();
   });
-  fb.touchEnded(() => {
+  fb.mouseReleased(() => {
     clickB.setVolume(0.1);
     clickB.stop();
     clickB.play();
@@ -212,6 +212,18 @@ function setup() {
   cnv = createCanvas(rect.width, rect.height);
 
   playheadOffset = height / 2;
+
+  document.addEventListener('mousemove', (e) => {
+    console.log(e)
+    document.body.style.setProperty("--x", e.clientX);
+    document.body.style.setProperty("--y", e.clientY);
+  });
+  document.addEventListener('mousedown', (e) => {
+    document.body.classList.add('down');
+  })
+  document.addEventListener('mouseup', (e) => {
+    document.body.classList.remove('down');
+  })
 }
 
 function audioUpdate() {
@@ -284,7 +296,7 @@ fill(0, 102, 153);
   translate(-head.width * 0.3, -head.height/2);
   // translate(0, -head.height);
 
-  image(head, -20 + LFOBop * 2 + LFOJuiceA * 12, playheadOffset - head.height * 1.3 + map(v,min,max,-40,20) + LFOSway * 5 + LFOJuiceB * 20);
+  image(head, -20 + LFOBop * 2 + LFOJuiceA * 12, playheadOffset - head.height * 1.3 + map(v,min,max,10,20) + LFOSway * 5 + LFOJuiceB * 20);
 
 
 }
