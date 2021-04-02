@@ -116,6 +116,7 @@ function slowDown() {
 
 function setup() {
   // frameRate(fps);
+  pixelDensity(1);
   cover.hidden = true;
   if (navigator.userAgent.match("Firefox")) {
     const msg = document.createElement("P");
