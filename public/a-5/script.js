@@ -50,6 +50,18 @@ function btnDown(e) {
 
 }
 
+// function keyTyped(e) {
+//   if (key === 'a') {
+//   } else if (key === 'b') {
+//     value = 0;
+//   }
+//   // uncomment to prevent any default behavior
+//   // return false;
+// }
+// function keyReleased() {
+//   dpadRelease(dpad)
+// }
+
 function dpadPress(vector, el) {
   el.classList.add('active')
   // console.log(Math.abs(vector.x) > Math.abs(vector.y) ? 'x' : 'y')
@@ -83,6 +95,10 @@ function dpadPress(vector, el) {
   // }
 }
 
+function dpadRelease(el) {
+  el.classList.remove('active', 'up', 'down', 'left', 'right')
+}
+
 function move(dir) {
   pos = pos.add(dir)
 
@@ -103,7 +119,32 @@ function move(dir) {
 function btnUp(e) {
   e.preventDefault();
   soundTuples['btnLo'][1].play();
-  e.target.classList.remove('active', 'up', 'down', 'left', 'right')
+  dpadRelease(e.target)
+}
+
+function handleKeydown(e) {
+  switch(e.key) {
+    case 'w':
+    case 'ArrowUp':
+      dpadPress(createVector(0, -1), dpad)
+      break;
+    case 'a':
+    case 'ArrowLeft':
+      dpadPress(createVector(-1, 0), dpad)
+      break;
+    case 's':
+    case 'ArrowDown':
+      dpadPress(createVector(0, 1), dpad)
+      break;
+    case 'd':
+    case 'ArrowRight':
+      dpadPress(createVector(1, 0), dpad)
+      break;
+  }
+}
+
+function handleKeyup(e) {
+  dpadRelease(dpad)
 }
 
 function setup() {
@@ -141,6 +182,9 @@ function setup() {
 
   mainEl = document.querySelector("main");
   pos = createVector(1, 5)
+
+  document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('keyup', handleKeyup)
 }
 
 function draw() {
