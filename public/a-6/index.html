@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <title>D-Pad</title>
+
+    <!-- this prevents a dorky zoomed-out page on mobile -->
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+
+    <!-- this tells the browser which characters we're using -->
+    <meta charset="UTF-8"> 
+
+    <!-- this gets us nice fonts -->
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300&display=swap" rel="stylesheet"> 
+
+    <!-- favicon links -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+
+    <!-- global styles -->
+    <link href="/global.css" rel="stylesheet">
+
+    <!-- page styles -->
+    <link href="./style.css" rel="stylesheet">
+
+  </head>
+
+  <body>
+
+    <article>
+      <main>
+        
+      </main>
+    <div id="controls">
+      
+      <div class="left">
+        <button id="dpad">
+          <span class="y"></span>
+          <span class="x"></span>
+          <span class="circle"></span>
+          <!-- <svg width="111" height="111" viewBox="0 0 111 111" fill="none" xmlns="http://www.w3.org/2000/svg"> -->
+            <!-- <path d="M55.5 0C51.634 0 48.5 3.134 48.5 7V35L55.5 41L62.5 35V7C62.5 3.134 59.366 0 55.5 0Z" fill="#C4C4C4"/> -->
+            <!-- <path d="M111 55.5C111 51.634 107.866 48.5 104 48.5H76L70 55.5L76 62.5H104C107.866 62.5 111 59.366 111 55.5Z" fill="#C4C4C4"/> -->
+            <!-- <path d="M0 55.5C0 59.366 3.13403 62.5 7 62.5H35L41 55.5L35 48.5H7C3.13403 48.5 0 51.634 0 55.5Z" fill="#C4C4C4"/> -->
+            <!-- <path d="M62.5 104C62.5 107.866 59.366 111 55.5 111C51.634 111 48.5 107.866 48.5 104V76L55.5 70L62.5 76V104Z" fill="#C4C4C4"/> -->
+            <!-- </svg> -->
+
+        </button>
+      </div>
+      <div class="right buttons" id="r">
+      </div>
+      
+    </div>
+    </article>
+    <script src="p5.js"></script>
+    <script src="p5.sound.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
