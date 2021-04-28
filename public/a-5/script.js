@@ -35,19 +35,18 @@ function preload() {
 
 function btnDown(e) {
   e.preventDefault();
-  soundTuples['btnLo'][0].play();
-  // x = x + 1
 
-  // determine if left or right
   const rect = e.target.getBoundingClientRect()
-  // console.log(rect)
-  const touchPos = createVector(e.touches[0].clientX, e.touches[0].clientY)
   const elCenterPos = createVector(rect.left + rect.width/2, rect.top + rect.height/2)
-  // console.log()
-  // console.log(e.touches[0].clientX, rect.left + rect.width/2)
-  dpadPress(touchPos.sub(elCenterPos), e.target)
-  // console.log(touchPos.sub(elCenterPos))
+  let point;
 
+  if (e.type === 'touchstart') {
+    point = createVector(e.touches[0].clientX, e.touches[0].clientY)
+    soundTuples['btnLo'][0].play();
+  } else if (e.type === 'mousedown') {
+    point = createVector(e.clientX, e.clientY)
+  }
+    dpadPress(point.sub(elCenterPos), e.target)
 }
 
 // function keyTyped(e) {
@@ -95,8 +94,8 @@ function dpadPress(vector, el) {
   // }
 }
 
-function dpadRelease(el) {
-  el.classList.remove('active', 'up', 'down', 'left', 'right')
+function dpadRelease() {
+  dpad.classList.remove('active', 'up', 'down', 'left', 'right')
 }
 
 function move(dir) {
@@ -118,12 +117,16 @@ function move(dir) {
 
 function btnUp(e) {
   e.preventDefault();
-  soundTuples['btnLo'][1].play();
+
+  if (e.type === 'touchend') {
+    soundTuples['btnLo'][1].play();
+  }
+
   dpadRelease(e.target)
 }
 
-function handleKeydown(e) {
-  switch(e.key) {
+function keyPressed() {
+  switch(key) {
     case 'w':
     case 'ArrowUp':
       dpadPress(createVector(0, -1), dpad)
@@ -143,7 +146,7 @@ function handleKeydown(e) {
   }
 }
 
-function handleKeyup(e) {
+function keyReleased() {
   dpadRelease(dpad)
 }
 
@@ -165,26 +168,13 @@ function setup() {
   // playbtn.elt.addEventListener('touchend', btnUp)
   // playbtn.elt.addEventListener('mouseup', btnUp)
 
-  // playbtn.elt.addEventListener('keydown', btnDown)
-  // playbtn.elt.addEventListener('keyup', btnUp)
-  // r.appendChild(playbtn.elt);
-
-  // dpad = createButton('+');
-  // dpad.elt.id = "dpad";
   dpad.addEventListener('touchstart', btnDown)
-  // dpad.addEventListener('mousedown', btnDown)
+  dpad.addEventListener('mousedown', btnDown)
   dpad.addEventListener('touchend', btnUp)
-  // dpad.addEventListener('mouseup', btnUp)
-
-  // dpad.elt.addEventListener('keydown', btnDown)
-  // dpad.elt.addEventListener('keyup', btnUp)
-  // l.appendChild(dpad.elt);
+  dpad.addEventListener('mouseup', btnUp)
 
   mainEl = document.querySelector("main");
   pos = createVector(1, 5)
-
-  document.addEventListener('keydown', handleKeydown)
-  document.addEventListener('keyup', handleKeyup)
 }
 
 function draw() {
