@@ -35,7 +35,6 @@ function preload() {
 
 function btnDown(e) {
   e.preventDefault();
-  // e.target.classList.add('down')
   soundTuples['btnLo'][0].play();
   // x = x + 1
 
@@ -46,17 +45,30 @@ function btnDown(e) {
   const elCenterPos = createVector(rect.left + rect.width/2, rect.top + rect.height/2)
   // console.log()
   // console.log(e.touches[0].clientX, rect.left + rect.width/2)
-  dpadPress(touchPos.sub(elCenterPos))
+  dpadPress(touchPos.sub(elCenterPos), e.target)
   // console.log(touchPos.sub(elCenterPos))
 
 }
 
-function dpadPress(vector) {
+function dpadPress(vector, el) {
+  el.classList.add('active')
   // console.log(Math.abs(vector.x) > Math.abs(vector.y) ? 'x' : 'y')
   if (Math.abs(vector.x) > Math.abs(vector.y)) {
-    move(createVector(vector.x > 0 ? 1 : -1, 0))
+    if (vector.x > 0) {
+      el.classList.add('right')
+      move(createVector(1, 0))
+    } else {
+      el.classList.add('left')
+      move(createVector(-1, 0))
+    }
   } else {
-    move(createVector(0, vector.y > 0 ? 1 : -1))
+    if (vector.y > 0) {
+      el.classList.add('down')
+      move(createVector(0, 1))
+    } else {
+      el.classList.add('up')
+      move(createVector(0, -1))
+    }
   }
     
   // if (dir.x > 0) {
@@ -78,16 +90,20 @@ function move(dir) {
   if (pos.y < 0) {
     pos.y = hc;
   }
-  pos = createVector(pos.x, pos.y % 7)
 
+  if (pos.x < 0) {
+    pos.x = wc;
+  }
 
-  console.log(pos)
+  pos = createVector(pos.x % 7, pos.y % 7)
+
+  // console.log(pos)
 }
 
 function btnUp(e) {
   e.preventDefault();
   soundTuples['btnLo'][1].play();
-  e.target.classList.remove('down')
+  e.target.classList.remove('active', 'up', 'down', 'left', 'right')
 }
 
 function setup() {
@@ -115,9 +131,9 @@ function setup() {
   // dpad = createButton('+');
   // dpad.elt.id = "dpad";
   dpad.addEventListener('touchstart', btnDown)
-  dpad.addEventListener('mousedown', btnDown)
+  // dpad.addEventListener('mousedown', btnDown)
   dpad.addEventListener('touchend', btnUp)
-  dpad.addEventListener('mouseup', btnUp)
+  // dpad.addEventListener('mouseup', btnUp)
 
   // dpad.elt.addEventListener('keydown', btnDown)
   // dpad.elt.addEventListener('keyup', btnUp)

@@ -39,7 +39,6 @@ article {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 10vmin;
 }
 section {
   min-height: 50vh;
@@ -91,7 +90,7 @@ pre {
   transform: translate3D(-50%, 0, 0);
   /* flex-direction: column; */
   /* width: 4.5rem; */
-  height: calc(100vh - 80vmin - 10em);
+  height: calc(100vh - 100vmin - 10em);
   justify-content: center;
 }
 
@@ -201,12 +200,30 @@ pre {
   height: 13rem;
 
   position: relative;
+
+  transition: none !important;
+}
+
+#dpad.up {
+  transform: translate3d(0, -2px, 0);
+}
+
+#dpad.down {
+  transform: translate3d(0, 2px, 0);
+}
+
+#dpad.left {
+  transform: translate3d(-2px, 0, 0);
+}
+
+#dpad.right {
+  transform: translate3d(2px, 0, 0);
 }
 
 .y {
   pointer-events: none;
   display: block;
-  background: white;
+  background: #777;
   width: 66px;
   height: 100%;
   position: absolute;
@@ -219,7 +236,7 @@ pre {
 .x {
   pointer-events: none;
   display: block;
-  background: white;
+  background: #777;
   width: 100%;
   height: 66px;
   position: absolute;
@@ -227,6 +244,39 @@ pre {
   left: 0;
   transform: translateY(-50%);
   border-radius: 99rem;
+}
+
+.circle {
+  display: none;
+  background: black;
+  position: absolute;
+  width: 60px;
+  height: 60px;
+
+  opacity: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate3d(-50%, -50%, 0) scale(0.6) rotate(45deg);
+
+  border-radius: 99rem;
+
+  transition: all 0.05s ease-out;
+  transform-origin: center;
+}
+#dpad.active .circle {
+  opacity: 1;
+}
+#dpad.up .circle {
+  transform: translate3d(-50%, calc(-50% - 71px), 0);
+}
+#dpad.down .circle {
+  transform: translate3d(-50%, calc(-50% + 71px), 0);
+}
+#dpad.left .circle {
+  transform: translate3d(calc(-50% - 71px), -50%, 0);
+}
+#dpad.right .circle {
+  transform: translate3d(calc(-50% + 71px), -50%, 0) scale(1);
 }
 
 #dpad svg {
@@ -260,8 +310,8 @@ pre {
 }    
 
 canvas {
-  width: 80vmin !important;
-  height: 80vmin !important;
+  width: 100vmin !important;
+  height: 100vmin !important;
   cursor: pointer;
   background: #ff5c5c;
   box-shadow: inset 5px 5px rgba(0, 0, 0, 0.1);
