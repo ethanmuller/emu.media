@@ -1,5 +1,5 @@
 :root {
-  --bg: #00e436;
+  --bg: #e6e6e6;
   --fg: #000;
   --text: black;
   --cta: #ff0000;
@@ -39,6 +39,7 @@ article {
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  padding-top: 10vmin;
 }
 section {
   min-height: 50vh;
@@ -84,18 +85,48 @@ pre {
   bottom: 1rem;
   padding: 0 0.5rem;
   width: 100%;
+  align-items: flex-start;
   /* max-width: 45rem; */
   left: 50%;
   transform: translate3D(-50%, 0, 0);
   /* flex-direction: column; */
   /* width: 4.5rem; */
+  height: calc(100vh - 80vmin - 10em);
+  justify-content: center;
+}
+
+#r {
+  padding-right: 10vmin
+}
+
+#r button {
+  width: 5rem;
+  height: 5rem;
 }
 
 #controls button {
+  color: #333;
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.320, 1.275);
+
+  border-radius: 99rem;
 }
 
-#controls button:active {
+#play {
+  box-shadow: 6px 6px 14px 0 rgba(0, 0, 0, 0.2),
+              -8px -8px 18px 0 rgba(255, 255, 255, 0.55),
+              inset 6px 6px 10px 0 rgba(0, 0, 0, 0),
+              inset -6px -6px 10px 0 rgba(255, 255, 255, 0);
+
+}
+
+#play:active,
+#play.down {
   /* transform: scale(0.98); */
+  box-shadow: 6px 6px 14px 0 rgba(0, 0, 0, 0),
+    -8px -8px 18px 0 rgba(255, 255, 255, 0),
+  inset 6px 6px 10px 0 rgba(0, 0, 0, 0.2),
+  inset -6px -6px 10px 0 rgba(255, 255, 255, 0.5);
 }
 
 #rate {
@@ -164,6 +195,44 @@ pre {
 #play {
 }
 
+#dpad {
+  border: none;
+  width: 13rem;
+  height: 13rem;
+
+  position: relative;
+}
+
+.y {
+  pointer-events: none;
+  display: block;
+  background: white;
+  width: 66px;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 99rem;
+}
+
+.x {
+  pointer-events: none;
+  display: block;
+  background: white;
+  width: 100%;
+  height: 66px;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  border-radius: 99rem;
+}
+
+#dpad svg {
+  pointer-events: none;
+}
+
 #rate button:first-of-type {
 }
 
@@ -180,7 +249,7 @@ pre {
 
   color: white;
   background: var(--fg);
-  box-shadow: 0px 100px 80px rgba(0, 0, 0, 0.07), 0px 41.7776px 33.4221px rgba(0, 0, 0, 0.0503198), 0px 22.3363px 17.869px rgba(0, 0, 0, 0.0417275), 0px 12.5216px 10.0172px rgba(0, 0, 0, 0.035), 0px 6.6501px 5.32008px rgba(0, 0, 0, 0.0282725), 0px 2.76726px 2.21381px rgba(0, 0, 0, 0.0196802);
+  /* box-shadow: 0px 100px 80px rgba(0, 0, 0, 0.07), 0px 41.7776px 33.4221px rgba(0, 0, 0, 0.0503198), 0px 22.3363px 17.869px rgba(0, 0, 0, 0.0417275), 0px 12.5216px 10.0172px rgba(0, 0, 0, 0.035), 0px 6.6501px 5.32008px rgba(0, 0, 0, 0.0282725), 0px 2.76726px 2.21381px rgba(0, 0, 0, 0.0196802); */
   /* border-radius: 20px; */
   border: 2px solid #fbf4f40d;
 
@@ -194,7 +263,8 @@ canvas {
   width: 80vmin !important;
   height: 80vmin !important;
   cursor: pointer;
-  background: red;
+  background: #ff5c5c;
+  box-shadow: inset 5px 5px rgba(0, 0, 0, 0.1);
 }
 
 @keyframes spin {
@@ -227,16 +297,6 @@ section a {
   display: inline-block;
   padding: 1rem;
   padding-left: 0;
-}
-
-path:nth-child(3) { /* selects E */
-transform: translate3d(50px, 233px, 0) scale(-1);
-transform-origin: 50%;
-}
-
-path:nth-child(4) { /* selects M */
-transform: translate3d(50px, 12px, 0) scale(-1);
-transform-origin: 50%;
 }
 
 .plus {
