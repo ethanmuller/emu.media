@@ -57,7 +57,7 @@ function dpadDown(e) {
   let point;
 
   if (e.type === 'touchstart') {
-    point = createVector(e.touches[0].clientX, e.touches[0].clientY)
+    point = createVector(e.touches[e.touches.length - 1].clientX, e.touches[e.touches.length - 1].clientY)
     soundTuples['btnLo'][0].play();
   } else if (e.type === 'mousedown') {
     point = createVector(e.clientX, e.clientY)
