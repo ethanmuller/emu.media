@@ -1,0 +1,2885 @@
+<html lang="en"><head>
+    <title>flickguy</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=650, initial-scale=0.5">
+    <!-- scripts-->
+    <script>async function start() {
+    // init player and editor
+    const player = await makePlayer();
+    const editor = await makeEditor();
+
+    // setup play/edit buttons to switch between modes
+    const play = ui.action("play", playFromEditor);
+    const edit = ui.action("edit", editFromPlayer);
+
+    const playerContainer = ONE("#player");
+    const editorContainer = ONE("#editor");
+
+    function showPlayer() {
+        playerContainer.hidden = false;
+        editorContainer.hidden = true;
+        player.enter();
+    }
+
+    function showEditor() {
+        playerContainer.hidden = true;
+        editorContainer.hidden = false;
+        editor.enter();
+    }
+
+    async function playFromEditor() {
+        await player.copyFrom(editor.stateManager);
+        showPlayer();
+    }
+
+    async function editFromPlayer() {
+        await editor.stateManager.copyFrom(player.stateManager);
+        showEditor();
+    }
+
+    // determine if there is a project bundle embedded in this page
+    const bundle = maker.bundleFromHTML(document);
+
+    if (bundle) {
+        // embedded project, load it in the player
+        editor.helpContainer.hidden = false;
+        await player.loadBundle(bundle);
+        showPlayer();
+    } else {
+        // no embedded project, start editor blank
+        await editor.resetProject();
+        showEditor();
+    }
+}
+
+    </script>
+    <script>"strict"
+const maker = {};
+const ui = {};
+
+/**
+ * @template TProject
+ * @typedef {(project: TProject) => string[]} maker.ManifestFunction
+ */
+
+/**
+ * @typedef {Object} ResourceData
+ * @property {string} type
+ * @property {any} data
+ */
+
+/**
+ * @typedef {Object.<string, ResourceData>} maker.ResourceBundle
+ */
+
+/**
+ * @template TProject
+ * @typedef {Object} maker.ProjectBundle
+ * @property {TProject} project
+ * @property {maker.ResourceBundle} resources
+ */
+
+/**
+ * @template TData
+ * @template TInstance
+ * @typedef {Object} maker.ResourceHandler
+ * @property {(data: TData) => Promise<TInstance>} load
+ * @property {(instance: TInstance) => Promise<TInstance>} copy
+ * @property {(instance: TInstance) => Promise<TData>} save
+ */
+
+/** @type {Map<string, maker.ResourceHandler<any, any>>} */
+maker.resourceHandlers = new Map();
+
+maker.ResourceManager = class {
+    constructor() {
+        this.lastId = 0;
+        /** @type {Map<string, { type: string, instance: any }>} */
+        this.resources = new Map();
+    }
+
+    /**
+     * Generate a new unique id for a resource.
+     * @returns {string}
+     */
+    generateId() {
+        this.lastId += 1;
+        // just next lowest unused number
+        while (this.resources.has(this.lastId.toString())) {
+            this.lastId += 1;
+        }
+
+        return this.lastId.toString();
+    }
+    
+    /**
+     * Clear all resources.
+     */
+    clear() {
+        this.resources.clear();
+    }
+
+    /**
+     * Get the resource instance with the given id.
+     * @param {string} id 
+     * @returns {any}
+     */
+    get(id) {
+        return this.resources.get(id)?.instance;
+    }
+
+    /**
+     * Add a resource instance at a specific id.
+     * @param {string} id 
+     * @param {any} instance 
+     * @param {string} type 
+     */
+    set(id, instance, type) {
+        this.resources.set(id, { type, instance });
+    }
+
+    /**
+     * Add an instance as a new resource and return its new id.
+     * @param {any} instance 
+     * @param {string} type 
+     * @returns {string}
+     */
+    add(instance, type) {
+        const id = this.generateId();
+        this.set(id, instance, type);
+        return id;
+    }
+
+    /**
+     * Copy the existing resource with the given id and add it as a new resource.
+     * @param {string} id 
+     * @returns 
+     */
+    async fork(id) {
+        const source = this.resources.get(id);
+        const forkId = this.generateId();
+        const instance = await maker.resourceHandlers.get(source.type).copy(source.instance); 
+        this.set(forkId, instance, source.type);
+        return { id: forkId, instance };
+    }
+
+    /**
+     * Discard all resources except those at the ids given.
+     * @param {Iterable<string>} keepIds 
+     */
+    prune(keepIds) {
+        const ids = new Set(keepIds);
+
+        this.resources.forEach((_, id) => {
+            if (!ids.has(id)) this.resources.delete(id);
+        });
+    }
+
+    /**
+     * Copy all resources from another resource manager.
+     * @param {maker.ResourceManager} other 
+     */
+    async copyFrom(other) {
+        const tasks = [];
+        Array.from(other.resources).forEach(([id, { type, instance }]) => {
+            const task = maker.resourceHandlers.get(type)
+                         .copy(instance)
+                         .then((copy) => this.set(id, copy, type));
+            tasks.push(task);
+        });
+
+        return Promise.all(tasks);
+    }
+
+    /**
+     * Save all resources in an object mapping id to type and save data.
+     * @param {Iterable<string>} ids 
+     * @returns {Promise<maker.ResourceBundle>}
+     */
+    async save(ids) {
+        /** @type {maker.ResourceBundle} */
+        const bundle = {};
+
+        const resourceIds = new Set(ids);
+        const relevant = Array.from(this.resources)
+                         .filter(([id]) => resourceIds.has(id));
+
+        const tasks = [];
+        Array.from(relevant).forEach(([id, { type, instance }]) => {
+            const task = maker.resourceHandlers.get(type)
+                         .save(instance)
+                         .then((data) => bundle[id] = { type, data });
+            tasks.push(task);
+        });
+
+        await Promise.all(tasks);
+        return bundle;
+    }
+
+    /**
+     * Load all resources from the given bundle.
+     * @param {maker.ResourceBundle} bundle 
+     */
+    async load(bundle) {
+        const tasks = [];
+        Object.entries(bundle).forEach(([id, { type, data }]) => {
+            const task = maker.resourceHandlers.get(type)
+                         .load(data)
+                         .then((instance) => this.set(id, instance, type));
+            tasks.push(task);
+        });
+        return Promise.all(tasks);
+    }
+}
+
+/**
+ * 
+ * @template TState
+ */
+maker.StateManager = class extends EventTarget {
+    /**
+     * Create a state manager, optionally providing a function that describes
+     * how to determine resource dependencies of a given state. 
+     * @param {maker.ManifestFunction<TState>} getManifest 
+     */
+    constructor(getManifest = undefined) {
+        super();
+
+        this.getManifest = getManifest || (() => []);
+        this.resources = new maker.ResourceManager();
+
+        /** @type {TState[]} */
+        this.history = [];
+        this.index = -1;
+        this.historyLimit = 20;
+    }
+
+    /**
+     * The present state in history.
+     */
+    get present() {
+        return this.history[this.index];
+    }
+
+    /**
+     * Is there any edit history to undo to?
+     */
+    get canUndo() {
+        return this.index > 0;
+    }
+
+    /**
+     * Are there any undone edits to redo?
+     */
+    get canRedo() {
+        return this.index < this.history.length - 1;
+    }
+
+    /**
+     * Replace all state with the project and resources in the given project
+     * bundle.
+     * @param {maker.ProjectBundle<TState>} bundle
+     */
+    async loadBundle(bundle) {
+        this.history.length = 0;
+        this.history.push(bundle.project);
+        this.index = 0;
+        this.resources.clear();
+        await this.resources.load(bundle.resources);
+
+        this.changed();
+    }
+
+    /**
+     * Replace all state by copying from another state manager.
+     * @param {maker.StateManager<TState>} other 
+     */
+    async copyFrom(other) {
+        this.history = COPY(other.history);
+        this.index = other.index;
+        this.resources.clear();
+        await this.resources.copyFrom(other.resources);
+        
+        this.changed();
+    }
+    
+    /**
+     * Copy the present state and dependent resources into a project bundle.
+     * @returns {Promise<maker.ProjectBundle<TState>>}
+     */
+    async makeBundle() {
+        const project = COPY(this.present);
+        const resources = await this.resources.save(this.getManifest(this.present));
+
+        return { project, resources };
+    }
+
+    /**
+     * Save the current state as a checkpoint in history that can be returned to
+     * with undo/redo.
+     */
+    makeCheckpoint() {
+        this.history.length = this.index + 1;
+        
+        const currentData = this.present;
+
+        this.history[this.index] = COPY(currentData);
+        this.history.push(currentData);
+        
+        if (this.index < this.historyLimit) {
+            this.index += 1;
+        } else {
+            // delete earliest history
+            this.history.splice(0, 1);
+            this.pruneResources();
+        }
+    }
+
+    /**
+     * Dispatch the change event signalling that the present state has been
+     * updated.
+     */
+    changed() {
+        this.dispatchEvent(new CustomEvent("change"));
+    }
+
+    /**
+     * Discard all resources that are no longer required accord to the manifest
+     * function.
+     */
+    pruneResources() {
+        this.resources.prune(this.history.flatMap(this.getManifest));
+    }
+
+    /**
+     * Make a history checkpoint, replace the current state with a forked
+     * version via callback, and then dispatch the change event.
+     * @param {(data: TState) => Promise} action 
+     */
+    async makeChange(action) {
+        this.makeCheckpoint();
+        await action(this.present);
+        this.changed();
+    }
+
+    /**
+     * Revert the state to the previous checkpoint in history.
+     */
+    undo() {
+        if (!this.canUndo) return;
+        this.index -= 1;
+        this.changed();
+    }
+
+    /**
+     * Return the state to the most recently undone checkpoint in history.
+     */
+    redo() {
+        if (!this.canRedo) return;
+        this.index += 1;
+        this.changed();
+    }
+};
+
+/**
+ * Ask the browser to download the given blob as a file with the given name.
+ * @param {Blob} blob 
+ * @param {string} name
+ */
+maker.saveAs = function(blob, name) {
+    const element = document.createElement("a");
+    const url = window.URL.createObjectURL(blob);
+    element.href = url;
+    element.download = name;
+    element.click();
+    window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Open the browser file picker, optionally restricted to files of a given file
+ * type pattern and optionally accepting multiple files. 
+ * @param {string} accept 
+ * @param {boolean} multiple 
+ * @returns {Promise<File[]>}
+ */
+ maker.pickFiles = async function(accept = "*", multiple = false) {
+    return new Promise((resolve) => {
+        const fileInput = html("input", { type: "file", accept, multiple });
+        fileInput.addEventListener("change", () => resolve(Array.from(fileInput.files)));
+        fileInput.click();
+    });
+}
+
+/**
+ * Read plain text from a file.
+ * @param {File} file 
+ * @return {Promise<string>}
+ */
+maker.textFromFile = async function(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => resolve(/** @type {string} */ (reader.result));
+        reader.readAsText(file); 
+    });
+}
+
+/**
+ * Read image from a file.
+ * @param {File} file 
+ * @return {Promise<string>}
+ */
+maker.dataURIFromFile = async function(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => resolve(/** @type {string} */ (reader.result));
+        reader.readAsDataURL(file); 
+    });
+}
+
+/**
+ * Create a DOM for an html page from html source code
+ * @param {string} source
+ * @returns 
+ */
+maker.htmlFromText = function(source) {
+    const template = document.createElement('template');
+    template.innerHTML = source;
+    return template.content;
+}
+
+/**
+ * @param {string} text 
+ */
+maker.textToBlob = function(text, type = "text/plain") {
+    return new Blob([text], { type });
+}
+
+/**
+ * 
+ * @param {ParentNode} html 
+ */
+maker.bundleFromHTML = function(html, query="#bundle-embed") {
+    const json = ONE(query, html)?.textContent;
+    const bundle = json ? JSON.parse(json) : undefined;
+    return bundle;
+}
+
+class RadioGroupWrapper extends EventTarget {
+    /** @param {HTMLInputElement[]} inputs */
+    constructor(inputs) {
+        super();
+        this.inputs = inputs;
+
+        inputs.forEach((input) => {
+            input.addEventListener("change", () => {
+                if (!input.checked) return;
+                this.dispatchEvent(new CustomEvent("change"));
+            });
+        });
+    }
+
+    get selectedIndex() {
+        return this.inputs.findIndex((button) => button.checked); 
+    }
+
+    set selectedIndex(value) {
+        this.inputs[value].click();
+    }
+
+    get selectedInput() {
+        return this.inputs[this.selectedIndex];
+    }
+
+    get value() {
+        return this.selectedInput?.value;
+    }
+}
+
+class CheckboxWrapper extends EventTarget {
+    /** @param {HTMLInputElement[]} inputs */
+    constructor(inputs) {
+        super();
+        this.inputs = inputs;
+
+        inputs.forEach((input) => {
+            input.addEventListener("change", () => {
+                this.dispatchEvent(new CustomEvent("change"));
+                inputs.forEach((input) => input.checked = input.checked);
+            });
+        });
+    }
+
+    get checked() {
+        return this.inputs[0].checked; 
+    }
+
+    set checked(value) {
+        if (this.checked !== value) this.inputs[0].click();
+    }
+}
+
+class ButtonAction extends EventTarget {
+    /** @param {HTMLButtonElement[]} buttons */
+    constructor(buttons) {
+        super();
+        this.buttons = buttons;
+        this.disabled = false;
+
+        buttons.forEach((button) => {
+            button.addEventListener("click", () => this.invoke());
+        });
+    }
+
+    get disabled() {
+        return this._disabled;
+    }
+
+    set disabled(value) {
+        this._disabled = value;
+        this.buttons.forEach((button) => button.disabled = value);
+    }
+
+    invoke(force = false) {
+        if (!force && this.disabled) return;
+        this.dispatchEvent(new CustomEvent("invoke"));
+    }
+}
+
+/**
+ * Get a wrapper for the radio input elements sharing the given name.
+ * @param {string} name
+ * @returns {RadioGroupWrapper}
+ */
+ui.radio = (name) => new RadioGroupWrapper(ALL(`input[type="radio"][name="${name}"]`));
+
+ui.toggle = (name) => new CheckboxWrapper(ALL(`input[type="checkbox"][name="${name}"]`));
+
+/**
+ * Get an action linked to all button elements sharing the given name. 
+ * Optionally provide a default listener for the action.
+ * @param {string} name
+ * @param {() => void} listener
+ * @returns {ButtonAction}
+ */
+ui.action = function (name, listener=undefined) {
+    const action = new ButtonAction(ALL(`button[name="${name}"]`));
+    if (listener) action.addEventListener("invoke", listener);
+    return action;
+}
+
+/**
+ * Get the html select element with the given name.
+ * @param {string} name
+ * @returns {HTMLSelectElement}
+ */
+ui.select = (name) => ONE(`select[name="${name}"]`);
+
+/**
+ * Get a child element matching CSS selector.
+ * @param {string} query 
+ * @param {ParentNode} element 
+ * @returns {HTMLElement}
+ */
+const ONE = (query, element = undefined) => (element || document).querySelector(query);
+
+/**
+ * Get all children elements matching CSS selector.
+ * @param {string} query 
+ * @param {HTMLElement | Document} element 
+ * @returns {HTMLElement[]}
+ */
+const ALL = (query, element = undefined) => Array.from((element || document).querySelectorAll(query));
+
+ui.PointerDrag = class extends EventTarget {
+    /** 
+     * @param {MouseEvent} event
+     */
+    constructor(event, { clickMovementLimit = 5 } = {}) {
+        super();
+        this.pointerId = event["pointerId"];
+        this.clickMovementLimit = 5;
+        this.totalMovement = 0;
+
+        this.downEvent = event;
+        this.lastEvent = event; 
+
+        this.listeners = {
+            "pointerup": (event) => {
+                if (event.pointerId !== this.pointerId) return;
+
+                this.lastEvent = event;
+                this.unlisten();
+                this.dispatchEvent(new CustomEvent("up", { detail: event }));
+                if (this.totalMovement <= clickMovementLimit) {
+                    this.dispatchEvent(new CustomEvent("click", { detail: event }));
+                }
+            },
+
+            "pointermove": (event) => {
+                if (event.pointerId !== this.pointerId) return;
+
+                this.totalMovement += Math.abs(event.movementX);
+                this.totalMovement += Math.abs(event.movementY);
+                this.lastEvent = event;
+                this.dispatchEvent(new CustomEvent("move", { detail: event }));
+            }
+        }
+
+        document.addEventListener("pointerup", this.listeners.pointerup);
+        document.addEventListener("pointermove", this.listeners.pointermove);
+    }
+
+    unlisten() {
+        document.removeEventListener("pointerup", this.listeners.pointerup);
+        document.removeEventListener("pointermove", this.listeners.pointermove);
+    }
+}
+
+/**
+ * Wrap a pointer down event and track its subsequent movement until release.
+ * @param {PointerEvent} event 
+ * @returns {ui.PointerDrag}
+ */
+ui.drag = (event) => new ui.PointerDrag(event);
+
+/**
+ * @param {HTMLCanvasElement} canvas 
+ * @param {MouseEvent} event 
+ */
+ function mouseEventToCanvasPixelCoords(canvas, event) {
+    const bounds = canvas.getBoundingClientRect();
+    const [mx, my] = [event.clientX - bounds.x, event.clientY - bounds.y];
+    const scale = canvas.width / canvas.clientWidth; 
+    const [px, py] = [Math.floor(mx * scale), Math.floor(my * scale)];
+    return { x: px, y: py };
+}
+
+/**
+ * Deep copy an object by serializing it to json and parsing it again.
+ * @template T
+ * @param {T} object
+ * @returns {T}
+ */
+const COPY = (object) => JSON.parse(JSON.stringify(object));
+
+/**
+ * Create an array of zeroes to the given length.
+ * @param {number} length 
+ * @returns {number[]}
+ */
+const ZEROES = (length) => Array(length).fill(0);
+
+/**
+ * Create an array of a value repeated to the given length.
+ * @template T
+ * @param {number} length 
+ * @param {T} value
+ * @returns {T[]}
+ */
+ const REPEAT = (length, value) => Array(length).fill(value);
+
+/**
+ * Create an html element with the given attributes and children.
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tagName 
+ * @param {*} attributes 
+ * @param  {...(Node | string)} children 
+ * @returns {HTMLElementTagNameMap[K]}
+ */
+ function html(tagName, attributes = {}, ...children) {
+    const element = /** @type {HTMLElementTagNameMap[K]} */ (document.createElement(tagName)); 
+    Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
+    children.forEach((child) => element.append(child));
+    return element;
+}
+
+    </script>
+    <script>/**
+ * @param {number} width
+ * @param {number} height
+ * @returns {CanvasRenderingContext2D}
+ */
+function createRendering2D(width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    context.imageSmoothingEnabled = false;
+    return context;
+}
+
+/**
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {string | CanvasGradient | CanvasPattern | undefined} fillStyle
+ */
+function fillRendering2D(rendering, fillStyle = undefined) {
+    if (fillStyle !== undefined) {
+        const prevStyle = rendering.fillStyle;
+        rendering.fillStyle = fillStyle;
+        rendering.fillRect(0, 0, rendering.canvas.width, rendering.canvas.height);
+        rendering.fillStyle = prevStyle;
+    } else {
+        rendering.clearRect(0, 0, rendering.canvas.width, rendering.canvas.height);
+    }
+}
+
+/**
+ * @param {CanvasRenderingContext2D} rendering
+ * @param {CanvasRenderingContext2D} destination
+ */
+function copyRendering2D(rendering, destination = undefined) {
+    destination = destination || createRendering2D(rendering.canvas.width, rendering.canvas.height);
+    destination.canvas.width = rendering.canvas.width;
+    destination.canvas.height = rendering.canvas.height;
+    destination.drawImage(rendering.canvas, 0, 0);
+    return destination;
+}
+
+/**
+
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {number} width 
+ * @param {number} height 
+ */
+function resizeRendering2D(rendering, width, height) {
+    const copy = copyRendering2D(rendering);
+    rendering.canvas.width = width;
+    rendering.canvas.height = height;
+    rendering.drawImage(copy.canvas, 0, 0);
+}
+
+/**
+ * @callback pixelsAction
+ * @param {Uint32Array} pixels
+ */
+
+/**
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {pixelsAction} action 
+ */
+function withPixels(rendering, action) {
+    const imageData = rendering.getImageData(0, 0, rendering.canvas.width, rendering.canvas.height);
+    action(new Uint32Array(imageData.data.buffer));
+    rendering.putImageData(imageData, 0, 0);
+}
+
+/**
+ * @param {CanvasRenderingContext2D} mask 
+ * @param {string} style 
+ */
+function recolorMask(mask, style) {
+    const recolored = copyRendering2D(mask);
+    recolored.globalCompositeOperation = "source-in";
+    fillRendering2D(recolored, style);
+    return recolored;
+}
+
+/**
+ * @param {number} x0 
+ * @param {number} y0 
+ * @param {number} x1 
+ * @param {number} y1 
+ * @param {(x: number, y: number) => void} plot 
+ */
+// adapted from https://stackoverflow.com/a/34267311
+function lineplot(x0, y0, x1, y1, plot) {
+    x0 |= 0; y0 |= 0; x1 |= 0; y1 |= 0;
+
+    const steep = Math.abs(y1 - y0) > Math.abs(x1 - x0);
+    if (steep) [x0, y0, x1, y1] = [y0, x0, y1, x1];
+
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const ystep = Math.sign(y1 - y0);
+    const xstep = Math.sign(x1 - x0);
+
+    let err = Math.floor(dx / 2);
+    let y = y0;
+
+    if (dx === 0 && dy === 0) {
+        plot(x0, y0);
+    }
+
+    for (let x = x0; x != (x1 + xstep); x += xstep) {
+        plot(steep ? y : x, steep ? x : y);
+        err -= dy;
+        if (err < 0) {
+            y += ystep;
+            err += dx;
+        }
+    }
+}
+
+/**
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {number} x 
+ * @param {number} y 
+ * @param {number} color
+ */
+function floodfill(rendering, x, y, color) {
+    const [width, height] = [rendering.canvas.width, rendering.canvas.height];
+    withPixels(rendering, pixels => {
+        const queue = [[x, y]];
+        const done = new Array(width * height);
+        const initial = pixels[y * width + x];
+
+        function enqueue(x, y) {
+            const within = x >= 0 && y >= 0 && x < width && y < height;
+
+            if (within && pixels[y * width + x] === initial && !done[y * width + x]) {
+                queue.push([x, y]);
+            }
+        }
+
+        while (queue.length > 0) {
+            const [x, y] = queue.pop();
+            pixels[y * width + x] = color;
+            done[y * width + x] = true;
+
+            enqueue(x - 1, y);
+            enqueue(x + 1, y);
+            enqueue(x, y - 1);
+            enqueue(x, y + 1);
+        }
+    });
+};
+
+/**
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {number} x 
+ * @param {number} y 
+ * @param {number} color
+ * @returns {CanvasRenderingContext2D}
+ */
+ function floodfillOutput(rendering, x, y, color) {
+    const [width, height] = [rendering.canvas.width, rendering.canvas.height];
+    const output = createRendering2D(width, height);
+    withPixels(rendering, srcPixels =>
+    withPixels(output, dstPixels => {
+        const queue = [[x, y]];
+        const done = new Array(width * height);
+        const initial = srcPixels[y * width + x];
+
+        function enqueue(x, y) {
+            const within = x >= 0 && y >= 0 && x < width && y < height;
+
+            if (within && srcPixels[y * width + x] === initial && !done[y * width + x]) {
+                queue.push([x, y]);
+            }
+        }
+
+        while (queue.length > 0) {
+            const [x, y] = queue.pop();
+            dstPixels[y * width + x] = color;
+            done[y * width + x] = true;
+
+            enqueue(x - 1, y);
+            enqueue(x + 1, y);
+            enqueue(x, y - 1);
+            enqueue(x, y + 1);
+        }
+    }));
+    return output;
+};
+
+/**
+ * @param {{r:number,g:number,b:number}} rgb 
+ */
+function rgbToHex(rgb) {
+    const packed = (0xFF000000 + (rgb.r << 16) + (rgb.g << 8) + (rgb.b << 0));
+    return "#" + packed.toString(16).substr(-6);
+}
+
+/**
+ * @param {string} hex 
+ * @param {number} alpha
+ */
+function hexToUint32(hex, alpha = undefined) {
+    if (hex.charAt(0) === '#') hex = hex.substring(1);
+    if (alpha === undefined && hex.length === 8) alpha = parseInt(hex.substr(6, 2), 16);
+    if (alpha === undefined) alpha = 255;
+    hex = hex.substr(4, 2) + hex.substr(2, 2) + hex.substr(0, 2);
+    return (parseInt(hex, 16) | (alpha << 24)) >>> 0;
+}
+
+/**
+ * @param {number} number
+ * @param {string} prefix 
+ */
+function numberToHex(number, prefix = '#') {
+    number = (number | 0xff000000) >>> 0;
+    let hex = number.toString(16).substring(2, 8);
+    hex = hex.substr(4, 2) + hex.substr(2, 2) + hex.substr(0, 2);
+    return prefix + hex;
+}
+
+const MASK_PALETTE = {
+    '_': hexToUint32('#000000', 0),
+    default: hexToUint32('#FFFFFF', 255),
+};
+
+/**
+ * @param {string} text 
+ * @param {Record<string, number>} palette 
+ * @returns {CanvasRenderingContext2D}
+ */
+function textToRendering2D(text, palette = MASK_PALETTE) {
+    text = text.trim();
+    const lines = text.split('\n').map((line) => [...line.trim()]);
+
+    const width = lines[0].length;
+    const height = lines.length;
+
+    const rendering = createRendering2D(width, height);
+    withPixels(rendering, (pixels) => {
+        lines.forEach((line, y) => line.forEach((char, x) => {
+            const color = palette[char];
+            pixels[y * width + x] = color !== undefined ? color : palette.default;
+        }));
+    });
+
+    return rendering;
+}
+
+/**
+ * @param {{ h: number, s: number, v: number }} hsv
+ */
+function HSVToRGB(hsv) {
+    const { h, s, v } = hsv;
+    let r, g, b;
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = (1 - s);
+    const q = (1 - f * s);
+    const t = (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = 1, g = t, b = p; break;
+        case 1: r = q, g = 1, b = p; break;
+        case 2: r = p, g = 1, b = t; break;
+        case 3: r = p, g = q, b = 1; break;
+        case 4: r = t, g = p, b = 1; break;
+        case 5: r = 1, g = p, b = q; break;
+    }
+
+    r *= v * 255;
+    g *= v * 255;
+    b *= v * 255;
+
+    return { r, g, b };
+}
+
+/**
+ * @param {{ r: number, g: number, b: number }} rgb
+ */
+function RGBToHSV(rgb) {
+    const { r, g, b } = rgb;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b),
+        d = max - min,
+        h,
+        s = (max === 0 ? 0 : d / max),
+        v = max / 255;
+
+    switch (max) {
+        case min: h = 0; break;
+        case r: h = (g - b) + d * (g < b ? 6: 0); h /= 6 * d; break;
+        case g: h = (b - r) + d * 2; h /= 6 * d; break;
+        case b: h = (r - g) + d * 4; h /= 6 * d; break;
+    }
+
+    return { h, s, v };
+}
+
+function HSVToCone(hsv) {
+    const a = Math.PI * hsv.h;
+    const r = hsv.s * .5 * hsv.v;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    return { x, y, z: hsv.v };
+}
+
+
+function uint32ToRGB(uint32) {
+    return {
+        r: uint32 >>>  0 & 0xFF,
+        g: uint32 >>>  8 & 0xFF,
+        b: uint32 >>> 16 & 0xFF,
+        uint32,
+    };
+}
+
+function hexToRGB(hex) {
+    if (hex.charAt(0) === '#') hex = hex.substring(1);
+    return {
+        b: parseInt(hex.substr(4, 2), 16),
+        g: parseInt(hex.substr(2, 2), 16),
+        r: parseInt(hex.substr(0, 2), 16),
+        uint32: hexToUint32(hex),
+    };
+}
+
+function RGBToUint32(rgb) {
+    return rgb.r | rgb.g << 8 | rgb.b << 16 | 0xFF << 24;
+}
+
+/**
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {string[]} palette 
+ */
+function recolorToPalette(rendering, palette) {
+    const paletteConverted = palette.map((hex) => { 
+        const cone = HSVToCone(RGBToHSV(hexToRGB(hex)));
+        const uint32 = hexToUint32(hex);
+        return { ...cone, uint32 };
+    });
+    const mapping = new Map();
+
+    function chooseColor(uint32) {
+        const alpha = (uint32 >>> 24) < 16;
+        if (alpha) return 0;
+
+        const existing = mapping.get(uint32);
+        if (existing) return existing;
+
+        const actual = HSVToCone(RGBToHSV(uint32ToRGB(uint32)));
+        let bestSqrDistance = Infinity;
+        let best = paletteConverted[0];
+
+        for (let candidate of paletteConverted) {
+            const dx = Math.abs(actual.x - candidate.x);
+            const dy = Math.abs(actual.y - candidate.y);
+            const dz = Math.abs(actual.z - candidate.z);
+            const sqrDistance = dx*dx + dy*dy + dz*dz;
+            
+            if (sqrDistance < bestSqrDistance) {
+                bestSqrDistance = sqrDistance;
+                best = candidate;
+            }
+        }
+
+        mapping.set(uint32, best.uint32);
+        return best.uint32;
+    }
+
+    withPixels(rendering, (pixels) => {
+        for (let i = 0; i < pixels.length; ++i) {
+            pixels[i] = chooseColor(pixels[i]);
+        }
+    });
+}
+
+/** 
+ * Copy image contents to a new canvas rendering context.
+ * @param {HTMLImageElement} image 
+ */
+function imageToRendering2D(image) {
+    const rendering = createRendering2D(image.naturalWidth, image.naturalHeight);
+    rendering.drawImage(image, 0, 0);
+    return rendering;
+}
+
+/**
+ * Create an html image from a given src (probably a datauri).
+ * @param {string} src
+ * @returns {Promise<HTMLImageElement>}
+ */
+async function loadImage(src) {
+    return new Promise((resolve, reject) => {
+        const image = document.createElement("img");
+        image.addEventListener("load", () => resolve(image));
+        image.addEventListener("error", reject);
+        image.src = src;
+    });
+}
+
+    </script>
+    <script>const crewmaker = {};
+
+// add a resource type called "canvas-datauri" that describes how to load a
+// canvas rendering context from a datauri, how to copy one, and how to convert
+// one back into a datauri
+maker.resourceHandlers.set("canvas-datauri", {
+    load: async (data) => imageToRendering2D(await loadImage(data)),
+    copy: async (instance) => copyRendering2D(instance),
+    save: async (instance) => instance.canvas.toDataURL(),
+});
+
+/**
+ * @typedef {Object} CrewmakerDataLayerOption
+ * @property {string} image
+ * @property {number} palette
+ */
+
+/**
+ * @typedef {Object} CrewmakerDataLayer
+ * @property {CrewmakerDataLayerOption[]} options
+ */
+
+/**
+ * @typedef {Object} CrewmakerDataProject
+ * @property {string[][]} palettes
+ * @property {CrewmakerDataLayer[]} layers
+ */
+
+/** 
+ * @param {CrewmakerDataProject} data 
+ * @returns {string[]}
+ */
+crewmaker.getManifest = function (data) {
+    // layer option images are the only resource dependencies in a crewmaker
+    return data.layers.flatMap((layer) => layer.options.map((option) => option.image));
+}
+
+crewmaker.layerWidth = 128;
+crewmaker.layerHeight = 128;
+
+/** @returns {maker.ProjectBundle<CrewmakerDataProject>} */
+crewmaker.makeBlankBundle = function () {
+    const blank = createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight);
+    fillRendering2D(blank);
+    const layers = ZEROES(8).map(() => ({  
+        options: ZEROES(8).map(() => ({ image: "0", palette: 0 })),
+    }));
+    const project = { palettes: crewmaker.defaultPalettes, layers };
+    const resources = {
+        "0": { type: "canvas-datauri", data: blank.canvas.toDataURL() },
+    };
+
+    return { project, resources };
+}
+
+/**
+ * @param {CanvasRenderingContext2D} rendering 
+ * @param {string[]} prev 
+ * @param {string[]} next 
+ */
+function swapPalette(rendering, prev, next) {
+    const mapping = new Map();
+    prev.forEach((hex, index) => mapping.set(hexToUint32(prev[index]), hexToUint32(next[index])));
+
+    withPixels(rendering, (pixels) => {
+        for (let i = 0; i < pixels.length; ++i) {
+            pixels[i] = mapping.get(pixels[i]) || pixels[i];
+        }
+    });
+}
+
+/**
+ * @param {number} min 
+ * @param {number} max 
+ * @returns {number}
+ */
+ function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min)) + min;
+}
+
+// default palettes (8 palettes of 8 colors)
+crewmaker.defaultPalettes = [
+    ["#000000","#94216a","#ff2674","#ff80a4","#34111f","#73392e","#c76e46","#ffb762"],["#000000","#d62411","#ff8426","#ffd100","#73392e","#c76e46","#eb9c6e","#ffdaac"],["#000000","#007899","#10d275","#bfff3c","#430067","#94216a","#ff2674","#ff80a4"],["#000000","#94216a","#ff2674","#ff80a4","#002859","#007899","#10d275","#bfff3c"],["#000000","#d62411","#ff8426","#ffd100","#1b1023","#002859","#007899","#68aed4"],["#000000","#002859","#007899","#68aed4","#430067","#94216a","#ff2674","#ff80a4"],["#000000","#007899","#10d275","#bfff3c","#7f0622","#d62411","#ff8426","#ffd100"],["#000000","#002859","#007899","#68aed4","#7f0622","#d62411","#ff8426","#ffd100"]
+];
+
+// brush names and datauris
+crewmaker.brushes = [
+    { name: "1px circle", image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAABlJREFUOI1jYBgFwx38/////0C7YRQMDQAApd4D/cefQokAAAAASUVORK5CYII=" },
+    { name: "2px circle", image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAABpJREFUOI1jYBgFwx38hwJ8apjo5ZhRMKgBADvbB/vPRl6wAAAAAElFTkSuQmCC" },
+    { name: "3px circle", image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAACNJREFUOI1jYBgFgxz8////PyE1jMRoZmRkxKmOYheMgmEBAARbC/qDr1pMAAAAAElFTkSuQmCC" },
+    { name: "4px circle", image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAChJREFUOI1jYBgFgxz8hwJ8ahjxaUZRyMiIVS0TeW4jEhDjhVEwGAAAJhAT9IYiYRoAAAAASUVORK5CYII=" },
+];
+
+crewmaker.Editor = class extends EventTarget {
+    constructor() {
+        super();
+
+        this.editorMode = true;
+
+        // to determine which resources are still in use for the project we
+        // combine everything the crewmaker needs plus anything this editor
+        // needs
+        const getManifest = (data) => [...crewmaker.getManifest(data), ...this.getManifest()];
+
+        /** @type {maker.StateManager<CrewmakerDataProject>} */
+        this.stateManager = new maker.StateManager(getManifest);
+        /** @type {CanvasRenderingContext2D} */
+        this.rendering = ONE("#renderer").getContext("2d");
+
+        this.stackActive = createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight);
+        this.stackUnder = createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight);
+        this.stackOver = createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight);
+        
+        this.preview = createRendering2D(this.rendering.canvas.width, this.rendering.canvas.height);
+        this.layerThumbs = ZEROES(8).map(() => createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight));
+        this.optionThumbs = ZEROES(8).map(() => createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight));
+        this.paletteThumbs = ZEROES(8).map(() => createRendering2D(1, 1));
+
+        // find all the ui already defined in the html
+        this.layerSelect = ui.radio("layer-select");
+        this.optionSelect = ui.radio("option-select");
+        this.paletteSelect = ui.radio("palette-select");
+        this.stackLayers = ui.toggle("stack-layers");
+
+        this.toolSelect = ui.radio("tool-select");
+        this.brushSelect = ui.radio("brush-select");
+        this.colorSelect = ui.radio("color-select");
+        this.helpContainer = ONE("#help");   
+
+        // initial selections
+        this.layerSelect.selectedIndex = 0;
+        this.optionSelect.selectedIndex = 0;
+        this.paletteSelect.selectedIndex = 0;
+
+        this.toolSelect.selectedIndex = 0;
+        this.brushSelect.selectedIndex = 0;
+        this.colorSelect.selectedIndex = 1;
+
+        this.selectedOptions = ZEROES(8);
+
+        // add thumbnails to the layer select bar
+        ALL("#layer-select input").forEach((input, index) => {
+            input.after(this.layerThumbs[index].canvas);
+        });
+
+        // add thumbnails to the option select bar
+        ALL("#option-select input").forEach((input, index) => {
+            input.after(this.optionThumbs[index].canvas);
+        });
+
+        // add thumbnails to the palette select bar
+        ALL("#palette-select input").forEach((input, index) => {
+            input.after(this.paletteThumbs[index].canvas);
+        });
+
+        // add brush icons and tooltips to brush select buttons
+        ALL("#brush-select label").forEach((label, index) => {
+            ONE("input", label).title = crewmaker.brushes[index].name + " brush";
+            ONE("img", label).src = crewmaker.brushes[index].image;
+        });
+
+        // state of the paint tools:
+        // is the color pick key held down?
+        this.heldColorPick = false;
+        // current brush and pattern recolored with current color
+        this.activeBrush = undefined;
+        this.activePattern = undefined;
+        // saved start coordinates during a line draw
+        this.lineStart = undefined;
+        // saved start coordinates during shift
+        this.shiftStart = undefined;
+        // layer option currently in the clipboard
+        this.copiedLayerOption = undefined;
+
+        // editor actions controlled by html buttons
+        this.actions = {
+            layerUp: ui.action("layer-up", () => this.shiftLayerUp()),
+            layerDown: ui.action("layer-down", () => this.shiftLayerDown()),
+
+            undo: ui.action("undo", () => this.stateManager.undo()),
+            redo: ui.action("redo", () => this.stateManager.redo()),
+            copy: ui.action("copy", () => this.copyLayerOption()),
+            paste: ui.action("paste", () => this.pasteLayerOption()),
+            clear: ui.action("clear", () => this.clearLayerOption()),
+            randomise: ui.action("randomise", () => this.randomise()),
+
+            export_: ui.action("export", () => this.exportProject()),
+            import_: ui.action("import", () => this.importProject()),
+            reset: ui.action("reset", () => this.resetProject()),
+            help: ui.action("help", () => this.toggleHelp()),
+
+            exportImage: ui.action("export-image", () => this.exportImage()),
+
+            importPalette: ui.action("import-palette", () => this.importPalette()),
+        };
+
+        // can't undo/redo/paste yet
+        this.actions.undo.disabled = true;
+        this.actions.redo.disabled = true;
+        this.actions.paste.disabled = true;
+
+        // hotkeys
+        document.addEventListener("keydown", (event) => {
+            if (event.ctrlKey && event.key === "z") this.actions.undo.invoke();
+            if (event.ctrlKey && event.key === "y") this.actions.redo.invoke();
+            if (event.ctrlKey && event.key === "c") this.actions.copy.invoke();
+            if (event.ctrlKey && event.key === "v") this.actions.paste.invoke();
+            if (event.ctrlKey && event.key === "x") {
+                this.actions.copy.invoke();
+                this.actions.clear.invoke();
+            }
+
+            if (event.code === "KeyQ") this.toolSelect.selectedIndex = 0;
+            if (event.code === "KeyW") this.toolSelect.selectedIndex = 1;
+            if (event.code === "KeyE") this.toolSelect.selectedIndex = 2;
+            if (event.code === "KeyR") this.toolSelect.selectedIndex = 3;
+
+            if (event.code === "KeyA") this.brushSelect.selectedIndex = 0;
+            if (event.code === "KeyS") this.brushSelect.selectedIndex = 1;
+            if (event.code === "KeyD") this.brushSelect.selectedIndex = 2;
+            if (event.code === "KeyF") this.brushSelect.selectedIndex = 3;
+
+            this.heldColorPick = event.altKey;
+        });
+
+        document.addEventListener("keyup", (event) => {
+            this.heldColorPick = event.altKey;
+        });
+
+        // changes in layer select bar
+        this.layerSelect.addEventListener("change", () => {
+            this.refreshLayerDisplay();
+        });
+
+        this.optionSelect.addEventListener("change", () => {
+            // remember selected option for this layer
+            this.selectedOptions[this.layerSelect.selectedIndex] = this.optionSelect.selectedIndex;
+            this.refreshLayerDisplay();
+        });
+
+        // changes in palette select bar
+        this.paletteSelect.addEventListener("change", async () => {
+            const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+            const option = layer.options[this.optionSelect.selectedIndex];
+            
+            const prev = this.stateManager.present.palettes[option.palette];
+            const next = this.stateManager.present.palettes[this.paletteSelect.selectedIndex];
+            
+            this.stateManager.makeCheckpoint();
+            const instance = await this.forkLayerOptionImage(option);
+            swapPalette(instance, prev, next);
+            option.palette = this.paletteSelect.selectedIndex;
+            this.stateManager.changed();
+
+            this.refreshColorSelect();
+        });
+
+        // changes in stack layers toggle
+        this.stackLayers.addEventListener("change", () => {
+            this.render();
+        });
+
+        // changes in the brush and pattern select bars
+        this.brushSelect.addEventListener("change", () => this.refreshActiveBrush());
+
+        // changes in the color select
+        this.colorSelect.addEventListener("change", () => {
+            this.refreshActiveBrush();
+        });
+    
+        // whenever the project data is changed
+        this.stateManager.addEventListener("change", () => {
+            this.refreshPaletteThumbs();
+            this.refreshLayerThumbnails();
+            this.refreshLayerDisplay();
+    
+            // enable/disable undo/redo buttons
+            this.actions.undo.disabled = !this.stateManager.canUndo;
+            this.actions.redo.disabled = !this.stateManager.canRedo;
+        });
+
+        // whenever a pointer moves anywhere on screen, update the paint cursors
+        // --listen on the whole document because for e.g line drawing it is 
+        // valid to move the mouse outside the edges of the drawing area
+        document.addEventListener("pointermove", (event) => {
+            const { x, y } = mouseEventToCanvasPixelCoords(this.rendering.canvas, event);
+            this.refreshPreview(x, y);
+        });
+        
+        // finger or mouse presses on the drawing area--could begin a drag or
+        // end quickly in a click
+        this.rendering.canvas.addEventListener("pointerdown", async (event) => {
+            // for mouse ignore non-left-clicks
+            if (event.button !== 0) return;
+            // ignore in player mode
+            if (!this.editorMode) return;
+
+            // treat this as the beginning of a possible drag
+            const drag = ui.drag(event);
+            const { x, y } = mouseEventToCanvasPixelCoords(this.rendering.canvas, event);
+
+            // prepare the plot function
+            const mask = createRendering2D(crewmaker.layerWidth, crewmaker.layerHeight);
+            const plotMask = (x, y) => mask.drawImage(this.activeBrush.canvas, (x - 7) | 0, (y - 7) | 0);
+            //const pattern = mask.createPattern(this.activePattern.canvas, 'repeat');
+            const drawPatternedMask = (instance) => {
+                //mask.globalCompositeOperation = "source-in";
+                //fillRendering2D(mask, pattern);
+                //mask.globalCompositeOperation = "source-over";
+
+                const erase = this.colorSelect.selectedIndex === 0;
+                instance.globalCompositeOperation = erase ? "destination-out" : "source-over";
+                instance.drawImage(mask.canvas, 0, 0);
+                instance.globalCompositeOperation = "source-over";
+                this.stateManager.changed();
+            };
+
+            // color picker selected or color pick hotkey held
+            if (this.toolSelect.value === "pick" || this.heldColorPick) {
+                drag.addEventListener("click", () => this.pickColor(x, y));
+            // flood fill selected
+            } else if (this.toolSelect.value === "fill") {
+                drag.addEventListener("click", () => this.floodFill(x, y));
+            // freehand drawing selected
+            } else if (this.toolSelect.value === "freehand") {
+                // fork the current options's image for editing and make an 
+                // undo/redo checkpoint
+                const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+                const option = layer.options[this.optionSelect.selectedIndex];
+                this.stateManager.makeCheckpoint();
+                const instance = await this.forkLayerOptionImage(option);
+
+                // draw the brush at the position the drag begins
+                plotMask(x, y);
+                drawPatternedMask(instance);
+
+                let prev = { x, y };
+
+                // draw the brush at the last position of the drag
+                drag.addEventListener("up", (event) => {
+                    const { x, y } = mouseEventToCanvasPixelCoords(this.rendering.canvas, event.detail);
+                    plotMask(x, y);
+                    drawPatternedMask(instance);
+                });
+
+                // as the pointer moves, draw brush lines between the points
+                drag.addEventListener("move", (event) => {
+                    const { x: x0, y: y0 } = prev;
+                    const { x: x1, y: y1 } = mouseEventToCanvasPixelCoords(this.rendering.canvas, event.detail);
+                    lineplot(x0, y0, x1, y1, plotMask);
+                    drawPatternedMask(instance);
+                    prev = { x: x1, y: y1 };
+                });
+            // line drawing selected
+            } else if (this.toolSelect.value === "line") {
+                // need to save this to draw the line preview
+                this.lineStart = { x, y };
+                this.refreshPreview(x, y);
+
+                // only actually draw the line at the end
+                drag.addEventListener("up", async (event) => {
+                    // fork the current options's image for editing and make an 
+                    // undo/redo checkpoint
+                    const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+                    const option = layer.options[this.optionSelect.selectedIndex];
+                    this.stateManager.makeCheckpoint();
+                    const instance = await this.forkLayerOptionImage(option);
+                    
+                    // line from pointer down position to pointer up position
+                    const { x: x0, y: y0 } = this.lineStart;
+                    const { x: x1, y: y1 } = mouseEventToCanvasPixelCoords(this.rendering.canvas, event.detail);
+
+                    lineplot(x0, y0, x1, y1, plotMask);
+                    drawPatternedMask(instance);
+
+                    // stop tracking line drawing
+                    this.lineStart = undefined;
+                });
+            }  else if (this.toolSelect.value === "shift") {
+                this.shiftStart = { x, y };
+
+                drag.addEventListener("up", async (event) => {
+                    const { x: x0, y: y0 } = this.shiftStart;
+                    const { x: x1, y: y1 } = mouseEventToCanvasPixelCoords(this.rendering.canvas, event.detail);
+
+                    fillRendering2D(this.preview);
+                    this.preview.drawImage(this.stackActive.canvas, x1 - x0, y1 - y0);
+
+                    // fork the current options's image for editing and make an 
+                    // undo/redo checkpoint
+                    const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+                    const option = layer.options[this.optionSelect.selectedIndex];
+                    this.stateManager.makeCheckpoint();
+                    const instance = await this.forkLayerOptionImage(option);
+                    fillRendering2D(instance);
+                    instance.drawImage(this.preview.canvas, 0, 0);
+                    
+                    this.shiftStart = undefined;
+                    this.refreshPreview(x1, y1);
+                });
+            }
+        });
+    }
+
+    async init() {
+        // load all the brush images
+        this.brushRenders = await Promise.all(crewmaker.brushes.map(({ image }) => loadImage(image).then(imageToRendering2D)));
+        
+        // make brush and pattern valid
+        this.refreshActiveBrush();
+    }
+
+    /**
+     * @param {CrewmakerDataLayerOption} option 
+     * @returns {Promise<CanvasRenderingContext2D>}
+     */
+    async forkLayerOptionImage(option) {
+        // create a new copy of the image resource
+        const { id, instance } = await this.stateManager.resources.fork(option.image);
+        // replace the option's image with the new copy
+        option.image = id;
+        // return the instance of the image for editing
+        return instance;
+    }
+
+    render() {
+        // clear everything
+        fillRendering2D(this.stackActive);
+        fillRendering2D(this.stackUnder);
+        fillRendering2D(this.stackOver);
+        fillRendering2D(this.rendering);
+
+        // composite layers into below, current, above
+        this.stateManager.present.layers.forEach((layer, index) => {
+            // get the layer's current option scene's image
+            const option = layer.options[this.selectedOptions[index]];
+            const image = this.stateManager.resources.get(option.image);
+            
+            if (index < this.layerSelect.selectedIndex) this.stackUnder.drawImage(image.canvas, 0, 0);
+            if (index > this.layerSelect.selectedIndex) this.stackOver.drawImage(image.canvas, 0, 0);
+            if (index === this.layerSelect.selectedIndex) this.stackActive.drawImage(image.canvas, 0, 0);
+        });
+
+        // should other layers be drawn transparent?
+        const onion = this.editorMode && !this.stackLayers.checked;
+        const inactiveAlpha = onion ? .35 : 1;
+
+        // all layers below the active layer
+        this.rendering.globalAlpha = inactiveAlpha;
+        this.rendering.drawImage(this.stackUnder.canvas, 0, 0);
+        // the active layer + paint preview
+        this.rendering.globalAlpha = 1;
+        this.rendering.drawImage(this.stackActive.canvas, 0, 0);
+        this.rendering.drawImage(this.preview.canvas, 0, 0);
+        // all layers above the active layer
+        this.rendering.globalAlpha = inactiveAlpha;
+        this.rendering.drawImage(this.stackOver.canvas, 0, 0);
+        this.rendering.globalAlpha = 1;
+
+        // signal, to anyone listening, that rendering happened
+        this.dispatchEvent(new CustomEvent("render"));
+    }
+
+    refreshPreview(x, y) {
+        if (!this.activeBrush) return;
+
+        // clear existing preview
+        fillRendering2D(this.preview);
+
+        // prepare plot function
+        const plot = (x, y) => this.preview.drawImage(this.activeBrush.canvas, (x - 7) | 0, (y - 7) | 0);
+
+        const cursor = this.toolSelect.value === "shift" ? "move" : "crosshair";
+        this.rendering.canvas.style.setProperty("cursor", cursor);
+
+        if (this.shiftStart) {
+            const { x: ox, y: oy } = this.shiftStart;
+            this.preview.drawImage(this.stackActive.canvas, x - ox, y - oy);
+        } else if (this.heldColorPick) {
+            // no preview for color picking
+        } else if (this.lineStart) {
+            // draw a patterned line between the pointer down location and the
+            // current pointer location
+            const { x: x0, y: y0 } = this.lineStart;
+            lineplot(x0, y0, x, y, plot);
+            //this.preview.globalCompositeOperation = "source-in";
+            //fillRendering2D(this.preview, this.preview.createPattern(this.activePattern.canvas, 'repeat'));
+            //this.preview.globalCompositeOperation = "source-over";
+        } else if (this.toolSelect.value === "freehand" || this.toolSelect.value === "line") {
+            // draw the patterned brush at the current pointer location
+            plot(x, y);
+            //this.preview.globalCompositeOperation = "source-in";
+            //fillRendering2D(this.preview, this.preview.createPattern(this.activePattern.canvas, 'repeat'));
+            //this.preview.globalCompositeOperation = "source-over";
+        } 
+
+        this.render();
+    }
+
+    refreshLayerDisplay() {
+        this.actions.layerUp.disabled = this.layerSelect.selectedIndex < 1;
+        this.actions.layerDown.disabled = this.layerSelect.selectedIndex > 6;
+
+        // switch option to remembered option for this layer
+        this.optionSelect.selectedIndex = this.selectedOptions[this.layerSelect.selectedIndex];
+
+        // switch to the natural palette of this option
+        const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+        const option = layer.options[this.optionSelect.selectedIndex];
+        this.paletteSelect.selectedIndex = option.palette;
+
+        this.refreshLayerOptionThumbnails();
+        this.refreshColorSelect();
+        this.refreshActiveBrush();
+
+        this.render();
+    }
+
+    refreshActiveBrush() {
+        if (!this.stateManager.present) return;
+
+        //const pattern = this.patternRenders[this.patternSelect.selectedIndex];
+        const brush = this.brushRenders[this.brushSelect.selectedIndex];
+        const palette = this.stateManager.present.palettes[this.paletteSelect.selectedIndex];
+        const color = palette[this.colorSelect.selectedIndex];
+        //if (!pattern || !brush || !color) return;
+        this.activeBrush = this.colorSelect.selectedIndex > 0 ? recolorMask(brush, color) : brush;
+        //this.activePattern = recolorMask(pattern, color);
+    }
+
+    refreshPaletteThumbs() {
+        // generate palette thumbnails
+        this.paletteThumbs.forEach((thumbnail, index) => {
+            const gap = 0;
+            const size = 12;
+            const pad = 0;
+
+            resizeRendering2D(thumbnail, 4 * size + 3 * gap + pad * 2, 2 * size + 1 * gap + pad * 2);
+            const palette = this.stateManager.present.palettes[index];
+            for (let y = 0; y < 2; ++y) {
+                for (let x = 0; x < 4; ++x) {
+                    thumbnail.fillStyle = palette[y * 4 + x];
+                    thumbnail.fillRect(x * (size + gap) + pad, y * (size + gap) + pad, size, size);
+                }
+            }
+        });
+    }
+
+    refreshColorSelect() {
+        const palette = this.stateManager.present.palettes[this.paletteSelect.selectedIndex];
+
+        // recolor the color select buttons to the corresponding color
+        ALL("#color-select label").forEach((label, index) => {
+            label.style.background = index > 0 ? palette[index] : "var(--trans-gradient)";
+        });
+    }
+
+    refreshLayerThumbnails() {
+        this.layerThumbs.forEach((thumbnail, index) => {
+            const layer = this.stateManager.present.layers[index];
+
+            fillRendering2D(thumbnail);
+
+            layer.options.forEach((layer) => {
+                const image = this.stateManager.resources.get(layer.image);
+                thumbnail.drawImage(image.canvas, 0, 0);
+            });
+
+            thumbnail.globalCompositeOperation = "source-in";
+            fillRendering2D(thumbnail, "#ffffff");
+            thumbnail.globalCompositeOperation = "source-over";
+        });
+    }
+
+    refreshLayerOptionThumbnails() {
+        const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+        this.optionThumbs.forEach((thumbnail, index) => {
+            fillRendering2D(thumbnail);
+            const image = this.stateManager.resources.get(layer.options[index].image);
+            thumbnail.drawImage(image.canvas, 0, 0);
+
+            thumbnail.globalCompositeOperation = "source-in";
+            fillRendering2D(thumbnail, "#ffffff");
+            thumbnail.globalCompositeOperation = "source-over";
+        });
+    }
+
+    floodFill(x, y) {
+        this.stateManager.makeChange(async (data) => {
+            // fork the current options's image
+            const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+            const option = layer.options[this.optionSelect.selectedIndex];
+            const instance = await this.forkLayerOptionImage(option);
+
+            const palette = this.stateManager.present.palettes[this.paletteSelect.selectedIndex];
+            const color = palette[this.colorSelect.selectedIndex];
+            const uint32 = this.colorSelect.selectedIndex > 0 ? hexToUint32(color) : 0;
+            floodfill(instance, x, y, uint32);
+
+            // find newly filled pixels
+            // const mask = floodfillOutput(instance, x, y, 0xFFFFFFFF);
+            // pattern the filled pixels
+            // mask.globalCompositeOperation = "source-in";
+            // fillRendering2D(mask, mask.createPattern(this.activePattern.canvas, 'repeat'));
+            // draw the final patterned fill
+            // instance.drawImage(mask.canvas, 0, 0);
+        });
+    }
+
+    pickColor(x, y) {
+        const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+        const option = layer.options[this.optionSelect.selectedIndex];
+        const instance = this.stateManager.resources.get(option.image);
+
+        const [r, g, b, a] = instance.getImageData(x, y, 1, 1).data;
+        const hex = rgbToHex({ r, g, b});
+        const palette = this.stateManager.present.palettes[option.palette];
+        
+        this.colorSelect.selectedIndex = a === 0 
+                                       ? 0
+                                       : palette.findIndex((color) => color === hex);
+    }
+
+    shiftLayerUp() {
+        if (this.layerSelect.selectedIndex < 1) return;
+
+        this.stateManager.makeChange(async (data) => {
+            const i = this.layerSelect.selectedIndex;
+            [data.layers[i-1], data.layers[i]] = [data.layers[i], data.layers[i-1]];
+            [this.selectedOptions[i-1], this.selectedOptions[i]] = [this.selectedOptions[i], this.selectedOptions[i-1]]
+            this.layerSelect.selectedIndex -= 1;
+            this.refreshLayerDisplay();
+        });
+    }
+
+    shiftLayerDown() {
+        if (this.layerSelect.selectedIndex > 6) return;
+
+        this.stateManager.makeChange(async (data) => {
+            const i = this.layerSelect.selectedIndex;
+            [data.layers[i], data.layers[i+1]] = [data.layers[i+1], data.layers[i]];
+            [this.selectedOptions[i], this.selectedOptions[i+1]] = [this.selectedOptions[i+1], this.selectedOptions[i]]
+            this.layerSelect.selectedIndex += 1;
+            this.refreshLayerDisplay();
+        });
+    }
+
+    copyLayerOption() {
+        // make a copy of option data and enable pasting
+        const layer = this.stateManager.present.layers[this.layerSelect.selectedIndex];
+        this.copiedLayerOption = COPY(layer.options[this.optionSelect.selectedIndex]);
+        this.actions.paste.disabled = false;
+    }
+
+    pasteLayerOption() {
+        this.stateManager.makeChange(async (data) => {
+            // replace selected layer option with a copy of the copied option
+            // --this is so it remains independent from the option kept in the
+            // clipboard
+            const layer = data.layers[this.layerSelect.selectedIndex];
+            layer.options[this.optionSelect.selectedIndex] = COPY(this.copiedLayerOption);
+        });
+    }
+
+    clearLayerOption() {
+        this.stateManager.makeChange(async (data) => {
+            const layer = data.layers[this.layerSelect.selectedIndex];
+            const option = layer.options[this.optionSelect.selectedIndex];
+            const instance = await this.forkLayerOptionImage(option);
+            fillRendering2D(instance);
+        });
+    }
+
+    async randomise() {
+        this.selectedOptions = ZEROES(8).map(() => getRandomInt(0, 8));
+        await this.stateManager.makeChange(async (data) => {
+            await Promise.all(data.layers.map(async (layer, index) => {
+                const option = layer.options[this.selectedOptions[index]];
+                const instance = await this.forkLayerOptionImage(option);
+
+                const prev = data.palettes[option.palette];
+                option.palette = getRandomInt(0, 8);
+                const next = data.palettes[option.palette];
+
+                swapPalette(instance, prev, next);
+            }));
+        });
+        this.refreshLayerDisplay();
+    }
+
+    /** @returns {string[]} */
+    getManifest() {
+        // the editor adds a dependency to the image in the copied scene, if any
+        // --we don't want this resource to be cleaned up accidentally because
+        // we might still want to paste it even after it stops being used in
+        // other scenes
+        return this.copiedLayerOption ? [this.copiedLayerOption.image] : [];
+    }
+
+    async exportProject() {
+        // make a standalone bundle of the current project state and the 
+        // resources it depends upon
+        const bundle = await this.stateManager.makeBundle();
+
+        // make a copy of this web page
+        const clone = /** @type {HTMLElement} */ (document.documentElement.cloneNode(true));
+        // remove some unwanted elements from the page copy
+        ALL("[data-empty]", clone).forEach((element) => element.replaceChildren());
+        ALL("[data-editor-only]", clone).forEach((element) => element.remove());
+        // insert the project bundle data into the page copy 
+        ONE("#bundle-embed", clone).innerHTML = JSON.stringify(bundle);
+
+        // prompt the browser to download the page
+        const name = "flickguy.html";
+        const blob = maker.textToBlob(clone.outerHTML, "text/html");
+        maker.saveAs(blob, name);
+    }
+
+    async importProject() {
+        // ask the browser to provide a file
+        const [file] = await maker.pickFiles("text/html");
+        // read the file and turn it into an html page
+        const text = await maker.textFromFile(file);
+        const html = await maker.htmlFromText(text);
+        // extract the bundle from the imported page
+        const bundle = maker.bundleFromHTML(html);
+        // load the contents of the bundle into the editor
+        await this.stateManager.loadBundle(bundle);
+    } 
+
+    async resetProject() {
+        // open a blank project in the editor
+        await this.stateManager.loadBundle(crewmaker.makeBlankBundle());
+    }
+    
+    exportImage() {
+        this.rendering.canvas.toBlob((blob) => {
+            maker.saveAs(blob, "your-character.png");
+        });        
+    }
+
+    toggleHelp() {
+        this.helpContainer.hidden = !this.helpContainer.hidden;
+    }
+
+    // for debugging
+    async importPalette() {
+        const [file] = await maker.pickFiles("image/*");
+        const dataUri = await maker.dataURIFromFile(file);
+        const image = await loadImage(dataUri);
+        const rendering = imageToRendering2D(image);
+
+        const prevPalettes = this.stateManager.present.palettes;
+        const nextPalettes = ZEROES(8).map(() => REPEAT(8, "#000000"));
+        withPixels(rendering, (pixels) => {
+            for (let p = 0; p < 8; ++p) {
+                for (let i = 1; i < 8; ++i) {
+                    nextPalettes[p][i] = rgbToHex(uint32ToRGB(pixels[p * 8 + i]));
+                }
+            }
+        });
+
+        await this.stateManager.makeChange(async (data) => {
+            data.palettes = nextPalettes;
+            const promises = data.layers.flatMap((layer) => { 
+                return layer.options.map(async (option) => {
+                    const instance = await this.forkLayerOptionImage(option);
+                    swapPalette(instance, prevPalettes[option.palette], nextPalettes[option.palette]);
+                });
+            });
+
+            return Promise.all(promises);
+        });
+    }
+
+    enterPlayerMode() {
+        this.editorMode = false;
+        ALL("[data-hidden-in-editor]").forEach((element) => element.hidden = false);
+        ALL("[data-hidden-in-player]").forEach((element) => element.hidden = true);
+        this.rendering.canvas.style.setProperty("cursor", "unset");
+        this.render();
+    }
+
+    enterEditorMode() {
+        this.editorMode = true;
+        ALL("[data-hidden-in-editor]").forEach((element) => element.hidden = true);
+        ALL("[data-hidden-in-player]").forEach((element) => element.hidden = false);
+        this.rendering.canvas.style.setProperty("cursor", "crosshair");
+        this.render();
+    }
+}
+
+crewmaker.start = async function () {
+    const editor = new crewmaker.Editor();
+    await editor.init();
+
+    // setup play/edit buttons to switch between modes
+    const play = ui.action("play", () => editor.enterPlayerMode());
+    const edit = ui.action("edit", () => editor.enterEditorMode());
+
+    // determine if there is a project bundle embedded in this page
+    const bundle = maker.bundleFromHTML(document);
+
+    if (bundle) {
+        // embedded project, load it in the player
+        await editor.stateManager.loadBundle(bundle);
+        editor.enterPlayerMode();
+    } else {
+        // no embedded project, start editor with default
+        const bundle = maker.bundleFromHTML(document, "#editor-embed");
+        await editor.stateManager.loadBundle(bundle);
+        //await editor.resetProject();
+        editor.enterEditorMode();
+    }
+}
+
+    </script>
+    <!-- styles-->
+    <style id="base-style">
+/* prevent weird highlights https://stackoverflow.com/questions/21003535/ */
+.no-select {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* hidden elements should be hidden regardless of their display style */
+[hidden] { display: none !important; }
+
+/* default to width/height including padding and border */
+* { box-sizing: border-box; }
+
+/* used dynamically to prevent or cancel smooth transitions */
+.skip-transition { transition: none !important; }
+
+/* make buttons and select inherit font */ 
+button, select { font-family: inherit; font-size: inherit; }
+
+/* clickable things should use this cursor imo */
+button, a, input[type="radio"],  input[type="checkbox"], select, option, label { cursor: pointer; }
+
+/* crisp pixelart */
+canvas, img {
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+    </style>
+    <style id="main-style">:root {
+    --button-color: #ffd800;
+
+    --trans-color-1: rgb(32, 32, 32);
+    --trans-color-2: rgb(48, 48, 48);
+    --trans-gradient: repeating-linear-gradient( -45deg, var(--trans-color-1), var(--trans-color-1) .5em, var(--trans-color-2) .5em, var(--trans-color-2) 1em );
+
+    font-family: sans-serif;
+}
+
+html, body {
+    margin: 0; padding: 0;
+    width: 100vw; min-height: 100vh;
+}
+
+body {
+    display: flex; flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    background: black;
+}
+
+#player {
+    position: absolute;
+    width: 100%; height: 100%;
+    overflow: hidden;
+
+    display: flex;
+    flex-direction: column;
+
+    padding: 1em;
+    padding-bottom: 0;
+    gap: 1em;
+}
+
+#player-container {
+    flex: 1;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#player-menu {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 1em;
+
+    height: 32px;
+
+    align-self: center;
+}
+
+#player-menu button {
+    background-color: black;
+    color: white;
+
+    font-weight: bold;
+    padding-left: 1em;
+    padding-right: 1em;
+
+    border: 1px solid white;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+}
+
+#player-menu a {
+    background-color: black;
+    color: white;
+
+    font-weight: bold;
+    padding-left: 1em;
+    padding-right: 1em;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    border: 1px solid white;
+    border-radius: 1em;
+}
+
+#editor {
+    display: flex; flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#editor main {
+    display: flex;
+    flex-direction: column;
+
+    padding: 1em;
+    background: #367b6b;
+    border-radius: 2em;
+    gap: 1em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+}
+
+#help {
+    font-family: monospace;
+    font-size: large;
+
+    display: flex;
+    padding: 1em;
+    gap: 1em;
+
+    overflow: hidden scroll;
+}
+
+#help [name="help"] {
+    position: absolute;
+    top: 1em; right: 1em;
+}
+
+#help button {
+    padding: 0 1em;
+    height: 32px;
+}
+
+#help p {
+    margin: 0;
+}
+
+#help a {
+    color: var(--button-color);
+}
+
+#help a:hover {
+    color: white;
+}
+
+#help a:visited {
+    color: gray;
+}
+
+#help ul {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    margin: 0 1em;
+    padding: 0;
+    gap: .5em 1em;
+    list-style: none;
+
+    align-content: center;
+}
+
+#menu {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 1em;
+
+    height: 32px;
+}
+
+#menu button {
+    background-color: var(--button-color);
+
+    font-weight: bold;
+    padding-left: 1em;
+    padding-right: 1em;
+
+    border: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+#scene-select {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    /* gap: .5em; */
+    gap: 2px;
+}
+
+#scene-select label {
+    aspect-ratio: 160 / 100;
+    background: none;
+}
+
+#scene-select *:checked + :not(input) {
+    box-shadow: 0 0 0 .5em white;
+    z-index: 5;
+}
+
+#scene-select label :not(input) {
+    filter: none;
+}
+
+#scene-select label :not(input) {
+    width: 100%; height: 100%;
+    position: absolute;
+}
+
+.grid8 label :not(input) { border-radius: 0; }
+.grid8 label:nth-child(1) :not(input) { border-top-left-radius: 1em; }
+.grid8 label:nth-child(8) :not(input) { border-top-right-radius: 1em; }
+.grid8 label:nth-last-child(8) :not(input) { border-bottom-left-radius: 1em; }
+.grid8 label:nth-last-child(1) :not(input) { border-bottom-right-radius: 1em; }
+
+#tools {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: 1em;
+}
+
+#tool-select {
+    grid-column: 1 / span 4;
+    grid-row: 1;
+
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+
+#tool-select input[type="radio"]:checked + img {
+    filter: invert();
+}
+
+#brush-select {
+    grid-column: 1 / span 4;
+    grid-row: 2 / span 1;
+
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(auto, 1fr);
+}
+
+#pattern-select {
+    grid-column: 1 / span 4;
+    grid-row: span 2;
+}
+
+#color-select {
+    grid-column: 5 / span 4;
+    grid-row: 1 / span 4;
+}
+
+#color-select input[type="radio"]:checked {
+    background: none;
+    box-shadow: 0 0 0 var(--highlight-thickness) white;
+    z-index: 5;
+
+    animation-name: selection-flash;
+    animation-direction: alternate;
+    animation-duration: 2s;
+    animation-iteration-count: infinite;
+}
+
+#jump-bar {
+    grid-column: 6 / -1;
+
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+
+    overflow: hidden;
+}
+
+#jump-source-color {
+    grid-column: 1 / span 1;
+
+    background-color: #d27d2c;
+}
+
+#jump-source-color {
+    text-align: center;
+    padding: .5em;
+
+    border-top-left-radius: 1em;
+    border-bottom-left-radius: 1em;
+}
+
+#jump-source-color svg {
+    pointer-events: none;
+    width: 24px;
+    height: 24px;
+}
+
+#jump-destination-select {
+    grid-column: 2 / -1;
+
+    padding: .5em;
+
+    border: none;
+    border-top-right-radius: 1em;
+    border-bottom-right-radius: 1em;
+
+    background-color: var(--button-color);
+}
+
+#toolbar {
+    grid-column: 1 / span 5;
+}
+
+#viewport {
+    position: relative;
+    display: flex; flex-direction: column;
+    border-radius: 1em;
+
+    background: var(--trans-gradient);
+    padding: .65em;
+
+    justify-content: center;
+    align-items: center;
+
+    overflow: hidden;
+}
+
+#help {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    color: white;
+    background-color: #000000DD;
+    /* border-radius: 1em; */
+
+    display: flex;
+    flex-direction: column;
+    padding: 1em;
+    overflow: auto;
+}
+
+#renderer {
+    width: 640px;
+    height: 400px;
+    background: magenta;
+
+    touch-action: none;
+}
+
+.button-row {
+    display: flex;
+    flex-direction: row;
+    gap: 1em;
+}
+
+button {
+    flex: 1;
+    white-space: nowrap;
+
+    border: none;
+    border-radius: 1em;
+    background-color: var(--button-color);
+
+    font-weight: bold;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+button:active {
+    filter: invert();
+}
+
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.grid4 {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+}
+
+.grid4 label { border-radius: 0; }
+.grid4 label:nth-child(1) { border-top-left-radius: 1em; }
+.grid4 label:nth-child(4) { border-top-right-radius: 1em; }
+.grid4 label:nth-last-child(4) { border-bottom-left-radius: 1em; }
+.grid4 label:nth-last-child(1) { border-bottom-right-radius: 1em; }
+
+.grid8 label { border-radius: 0; }
+.grid8 label:nth-child(1) { border-top-left-radius: 1em; }
+.grid8 label:nth-child(8) { border-top-right-radius: 1em; }
+.grid8 label:nth-last-child(8) { border-bottom-left-radius: 1em; }
+.grid8 label:nth-last-child(1) { border-bottom-right-radius: 1em; }
+
+.grid6 {
+    display: grid;
+    grid-template-columns: repeat(6, auto);
+}
+
+.grid8 {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+}
+
+.radio-select {
+    --highlight-thickness: .5em;
+}
+
+.radio-select label {
+    position: relative;
+
+    margin: 0;
+    appearance: unset;
+    background-color: var(--button-color);
+}
+
+.radio-select input[type="radio"] {
+    margin: 0;
+    appearance: unset;
+    border-radius: inherit;
+
+    position: absolute;
+    width: 100%; height: 100%;
+}
+
+.radio-select label img, .radio-select label svg, button img, button svg {
+    pointer-events: none;
+    width: 32px; height: 32px;
+}
+
+.radio-select label img, .radio-select label svg {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.radio-select input[type="radio"]:checked {
+    border: none;
+    background: blue;
+}
+
+.radio-select img {
+    filter: brightness(0);
+}
+
+.radio-select svg {
+    color: black;
+}
+
+.radio-select input[type="radio"]:checked + svg {
+    color: white;
+}
+
+.radio-select input[type="radio"]:checked + img {
+    filter: none;
+}
+
+@keyframes selection-flash {
+    0% {
+        box-shadow: 0 0 0 var(--highlight-thickness) black;
+    }
+
+    100% {
+        box-shadow: 0 0 0 var(--highlight-thickness) white;
+    }
+}
+
+.horizontal-capsule {
+    display: flex;
+    flex-direction: row;
+}
+
+.horizontal-capsule * {
+    flex: 1;
+}
+
+.horizontal-capsule > :first-child {
+    border-radius: 1em 0 0 1em;
+}
+
+.horizontal-capsule > :last-child {
+    border-radius: 0 1em 1em 0;
+}
+
+.vertical-capsule {
+    display: flex;
+    flex-direction: column;
+}
+
+.vertical-capsule * {
+    flex: 1;
+}
+
+.vertical-capsule > :first-child, .vertical-capsule > :first-child[hidden] + * {
+    border-radius: 1em 1em 0 0;
+}
+
+.vertical-capsule > :last-child, .vertical-capsule > :first-child[hidden] ~ :nth-last-child(2) {
+    border-radius: 0 0 1em 1em;
+}
+
+    </style>
+    <style id="crewmaker-style">.radio-select label {
+    min-height: 3em;
+}
+
+#viewport {
+    padding: 0;
+}
+
+#renderer {
+    width: 512px;
+    height: 512px;
+
+    background: none;
+}
+
+#stack-layers {
+    position: absolute;
+    top: 1em; right: 1em;
+    width: 60px;
+    height: 48px;
+
+    margin: 0;
+    appearance: unset;
+    background-color: var(--button-color);
+
+    border-radius: 1em;
+
+    opacity: 50%;
+}
+
+#stack-layers input {
+    appearance: unset;
+    margin: 0;
+    appearance: unset;
+    border-radius: inherit;
+
+    position: absolute;
+    width: 100%; height: 100%;
+}
+
+#stack-layers input + svg {
+    color: black;
+
+    pointer-events: none;
+    width: 32px; height: 32px;
+
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#stack-layers input:checked {
+    background: blue;
+}
+
+#stack-layers input:checked + svg {
+    color: white;
+}
+
+#layer-select {
+    gap: 2px;
+}
+
+#layer-select label {
+    background-color: var(--button-color);
+}
+
+#layer-select *:checked + :not(input) {
+    background: blue;
+}
+
+#layer-select label :not(input) {
+    filter: invert();
+}
+
+#layer-select label *:checked + :not(input) {
+    filter: none;
+}
+
+#layer-select label :not(input) {
+    width: 100%; height: 100%;
+    position: absolute;
+    border-radius: inherit;
+}
+
+#option-select label :not(input) {
+    width: 100%; height: 100%;
+    position: absolute;
+    border-radius: inherit;
+    object-fit: contain;
+
+    image-rendering: auto;
+}
+
+#option-select *:checked + :not(input) {
+    background: blue;
+}
+
+#option-select label :not(input) {
+    filter: brightness(0);
+}
+
+#option-select label *:checked + :not(input) {
+    filter: none;
+}
+
+#palette-select label :not(input) {
+    position: absolute;
+    border-radius: none;
+
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#middle {
+    display: flex;
+    flex-direction: row;
+    gap: 1em;
+}
+
+#layer-options {
+    display: flex;
+    flex-direction: row;
+    gap: 1em;
+    align-items: stretch;
+}
+
+#option-select {
+    flex: 1;
+    gap: 2px;
+}
+
+#palette-select {
+    flex: 1;
+}
+
+#palette-select input[type="radio"]:checked {
+    background: blue;
+}
+
+#layer-select label {
+    width: 64px;
+}
+
+#toolbar button {
+    padding: .25em;
+}
+
+#tools {
+    grid-template-areas:
+        "tool   color"
+        "brush  color"
+        "bar    bar  ";
+
+    grid-template-rows: unset;
+    grid-template-columns: unset;
+}
+
+#tool-select {
+    grid-area: tool;
+
+    display: flex;
+    flex-direction: row;
+}
+
+#brush-select {
+    grid-area: brush;
+}
+
+#color-select {
+    grid-area: color;
+}
+
+#toolbar {
+    grid-area: bar;
+}
+
+.hanging-menu {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 1em;
+
+    height: 32px;
+}
+
+.hanging-menu button {
+    background-color: var(--button-color);
+
+    font-weight: bold;
+    padding-left: 1em;
+    padding-right: 1em;
+
+    border: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+#layer-select > :nth-child(2) {
+    border-radius: 1em 1em 0 0;
+}
+
+#layer-select > :nth-last-child(2) {
+    border-radius: 0 0 1em 1em;
+}
+
+#layer-select > button {
+    border-radius: 1em;
+}
+
+#layer-select > :first-child {
+    margin-bottom: 1em;
+}
+
+#layer-select > :last-child {
+    margin-top: 1em;
+}
+
+:focus {
+    outline: thick solid white;
+    z-index: 5;
+}
+:focus:not(:focus-visible) { 
+    outline: unset 
+}
+
+:focus + * {
+    z-index: 5;
+}
+
+    </style>
+  </head>
+  <body onload="crewmaker.start()">
+    <div id="editor">
+      <main>
+        <section id="middle">
+          <div class="vertical-capsule radio-select" id="layer-select">
+            <button name="layer-up" title="shift layer up" data-hidden-in-player=""><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layer-forward" viewBox="0 0 16 16"><path d="M8.354.146a.5.5 0 0 0-.708 0l-3 3a.5.5 0 0 0 0 .708l1 1a.5.5 0 0 0 .708 0L7 4.207V12H1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H9V4.207l.646.647a.5.5 0 0 0 .708 0l1-1a.5.5 0 0 0 0-.708l-3-3z"></path><path d="M1 7a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h4.5a.5.5 0 0 0 0-1H1V8h4.5a.5.5 0 0 0 0-1H1zm9.5 0a.5.5 0 0 0 0 1H15v2h-4.5a.5.5 0 0 0 0 1H15a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-4.5z"></path></svg></button>
+            <label>
+              <input type="radio" name="layer-select" value="0" title="open layer 0"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="1" title="open layer 1"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="2" title="open layer 2"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="3" title="open layer 3"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="4" title="open layer 4"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="5" title="open layer 5"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="6" title="open layer 6"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="layer-select" value="7" title="open layer 7"><canvas width="128" height="128"></canvas>
+            </label>
+            <button name="layer-down" title="shift layer down" data-hidden-in-player=""><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layer-backward" viewBox="0 0 16 16"><path d="M8.354 15.854a.5.5 0 0 1-.708 0l-3-3a.5.5 0 0 1 0-.708l1-1a.5.5 0 0 1 .708 0l.646.647V4H1a1 1 0 0 1-1-1V1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9v7.793l.646-.647a.5.5 0 0 1 .708 0l1 1a.5.5 0 0 1 0 .708l-3 3z"></path><path d="M1 9a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4.5a.5.5 0 0 1 0 1H1v2h4.5a.5.5 0 0 1 0 1H1zm9.5 0a.5.5 0 0 1 0-1H15V6h-4.5a.5.5 0 0 1 0-1H15a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-4.5z"></path></svg></button>
+          </div>
+          <div id="viewport">
+            <canvas id="renderer" draggable="false" style="cursor: crosshair;" width="128" height="128"></canvas>
+            <label id="stack-layers" data-hidden-in-player="">
+              <input type="checkbox" name="stack-layers" title="show selected options for every layer at once"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-stack" viewBox="0 0 16 16"><path d="m14.12 10.163 1.715.858c.22.11.22.424 0 .534L8.267 15.34a.598.598 0 0 1-.534 0L.165 11.555a.299.299 0 0 1 0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0l5.317-2.66zM7.733.063a.598.598 0 0 1 .534 0l7.568 3.784a.3.3 0 0 1 0 .535L8.267 8.165a.598.598 0 0 1-.534 0L.165 4.382a.299.299 0 0 1 0-.535L7.733.063z"></path><path d="m14.12 6.576 1.715.858c.22.11.22.424 0 .534l-7.568 3.784a.598.598 0 0 1-.534 0L.165 7.968a.299.299 0 0 1 0-.534l1.716-.858 5.317 2.659c.505.252 1.1.252 1.604 0l5.317-2.659z"></path></svg>
+            </label>
+            <div id="help" hidden="">
+              <button name="help" title="hide help">close</button>version 1 (6/15/2021)<h1>flickguy</h1>
+<p>i'm candle and this is my take on a low-effort picrew inspired by stephen lavelle's <a href="http://flickgame.org">flickgame</a> tool</p>
+<p>i made this tool to help iron out a web tool template i'm working on, <a href="https://kool.tools/blog/flickgame-study.html">read more about it on my website</a></p>
+<h2>format</h2>
+<p>a flickguy is a tool for making little guys by compositing layers. each layer
+has a selection of image options and those images can optionally be palette
+swapped for color variations</p>
+<p>this is a tool or creating flickguys by painting 8 image options for 8 layers. the exported flickguy also allows the user to "remix" it to either make bespoke
+adjustments to their guy or make a whole new derivative flickguy to let others use</p>
+<h2>hotkeys</h2>
+<ul>
+<li><strong>ctrl+z</strong>: undo</li>
+<li><strong>ctrl+y</strong>: redo</li>
+<li><strong>ctrl+c</strong>: copy image</li>
+<li><strong>ctrl+v</strong>: paste image</li>
+<li><strong>qwer</strong>: change tool</li>
+<li><strong>asdf</strong>: change brush</li>
+<li><strong>alt+click</strong>: pick color</li>
+</ul>
+<h2>credits</h2>
+<p>thanks to <a href="https://twitter.com/netgal_emi">em</a>, <a href="https://twitter.com/SeanSLeBlanc">sean</a>, <a href="https://twitter.com/jazzmickle">jazz</a> for testing and advice</p>
+<p>palettes sampled from <a href="https://lospec.com/palette-list/bubblegum-16">BUBBLEGUM 16</a> by <a href="https://twitter.com/PineTreePizza">pine</a></p>
+<p>icons from <a href="https://icons.getbootstrap.com/">bootstrap</a></p>
+
+            </div>
+          </div>
+        </section>
+        <section id="layer-options">
+          <div class="grid4 radio-select" id="option-select">
+            <label>
+              <input type="radio" name="option-select" value="0" title="open option 0"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="1" title="open option 1"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="2" title="open option 2"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="3" title="open option 3"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="4" title="open option 4"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="5" title="open option 5"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="6" title="open option 6"><canvas width="128" height="128"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="option-select" value="7" title="open option 7"><canvas width="128" height="128"></canvas>
+            </label>
+          </div>
+          <div class="grid4 radio-select" id="palette-select" title="palettes">
+            <label>
+              <input type="radio" name="palette-select" value="0" title="select palette 0"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="1" title="select palette 1"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="2" title="select palette 2"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="3" title="select palette 3"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="4" title="select palette 4"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="5" title="select palette 5"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="6" title="select palette 6"><canvas width="48" height="24"></canvas>
+            </label>
+            <label>
+              <input type="radio" name="palette-select" value="7" title="select palette 7"><canvas width="48" height="24"></canvas>
+            </label>
+          </div>
+        </section>
+        <section id="tools" data-hidden-in-player="">
+          <div class="horizontal-capsule radio-select" id="tool-select" title="tools">
+            <label>
+              <input type="radio" name="tool-select" value="freehand" title="freehand paint"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-brush" viewBox="0 0 16 16"><path d="M15.825.12a.5.5 0 0 1 .132.584c-1.53 3.43-4.743 8.17-7.095 10.64a6.067 6.067 0 0 1-2.373 1.534c-.018.227-.06.538-.16.868-.201.659-.667 1.479-1.708 1.74a8.118 8.118 0 0 1-3.078.132 3.659 3.659 0 0 1-.562-.135 1.382 1.382 0 0 1-.466-.247.714.714 0 0 1-.204-.288.622.622 0 0 1 .004-.443c.095-.245.316-.38.461-.452.394-.197.625-.453.867-.826.095-.144.184-.297.287-.472l.117-.198c.151-.255.326-.54.546-.848.528-.739 1.201-.925 1.746-.896.126.007.243.025.348.048.062-.172.142-.38.238-.608.261-.619.658-1.419 1.187-2.069 2.176-2.67 6.18-6.206 9.117-8.104a.5.5 0 0 1 .596.04zM4.705 11.912a1.23 1.23 0 0 0-.419-.1c-.246-.013-.573.05-.879.479-.197.275-.355.532-.5.777l-.105.177c-.106.181-.213.362-.32.528a3.39 3.39 0 0 1-.76.861c.69.112 1.736.111 2.657-.12.559-.139.843-.569.993-1.06a3.122 3.122 0 0 0 .126-.75l-.793-.792zm1.44.026c.12-.04.277-.1.458-.183a5.068 5.068 0 0 0 1.535-1.1c1.9-1.996 4.412-5.57 6.052-8.631-2.59 1.927-5.566 4.66-7.302 6.792-.442.543-.795 1.243-1.042 1.826-.121.288-.214.54-.275.72v.001l.575.575zm-4.973 3.04.007-.005a.031.031 0 0 1-.007.004zm3.582-3.043.002.001h-.002z"></path></svg>
+            </label>
+            <label>
+              <input type="radio" name="tool-select" value="line" title="line paint"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-slash-lg" viewBox="0 0 16 16"><path d="M14.707 1.293a1 1 0 0 1 0 1.414l-12 12a1 1 0 0 1-1.414-1.414l12-12a1 1 0 0 1 1.414 0z"></path></svg>
+            </label>
+            <label>
+              <input type="radio" name="tool-select" value="fill" title="flood fill"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-paint-bucket" viewBox="0 0 16 16"><path d="M6.192 2.78c-.458-.677-.927-1.248-1.35-1.643a2.972 2.972 0 0 0-.71-.515c-.217-.104-.56-.205-.882-.02-.367.213-.427.63-.43.896-.003.304.064.664.173 1.044.196.687.556 1.528 1.035 2.402L.752 8.22c-.277.277-.269.656-.218.918.055.283.187.593.36.903.348.627.92 1.361 1.626 2.068.707.707 1.441 1.278 2.068 1.626.31.173.62.305.903.36.262.05.64.059.918-.218l5.615-5.615c.118.257.092.512.05.939-.03.292-.068.665-.073 1.176v.123h.003a1 1 0 0 0 1.993 0H14v-.057a1.01 1.01 0 0 0-.004-.117c-.055-1.25-.7-2.738-1.86-3.494a4.322 4.322 0 0 0-.211-.434c-.349-.626-.92-1.36-1.627-2.067-.707-.707-1.441-1.279-2.068-1.627-.31-.172-.62-.304-.903-.36-.262-.05-.64-.058-.918.219l-.217.216zM4.16 1.867c.381.356.844.922 1.311 1.632l-.704.705c-.382-.727-.66-1.402-.813-1.938a3.283 3.283 0 0 1-.131-.673c.091.061.204.15.337.274zm.394 3.965c.54.852 1.107 1.567 1.607 2.033a.5.5 0 1 0 .682-.732c-.453-.422-1.017-1.136-1.564-2.027l1.088-1.088c.054.12.115.243.183.365.349.627.92 1.361 1.627 2.068.706.707 1.44 1.278 2.068 1.626.122.068.244.13.365.183l-4.861 4.862a.571.571 0 0 1-.068-.01c-.137-.027-.342-.104-.608-.252-.524-.292-1.186-.8-1.846-1.46-.66-.66-1.168-1.32-1.46-1.846-.147-.265-.225-.47-.251-.607a.573.573 0 0 1-.01-.068l3.048-3.047zm2.87-1.935a2.44 2.44 0 0 1-.241-.561c.135.033.324.11.562.241.524.292 1.186.8 1.846 1.46.45.45.83.901 1.118 1.31a3.497 3.497 0 0 0-1.066.091 11.27 11.27 0 0 1-.76-.694c-.66-.66-1.167-1.322-1.458-1.847z"></path></svg>
+            </label>
+            <label>
+              <input type="radio" name="tool-select" value="pick" title="pick color"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eyedropper" viewBox="0 0 16 16"><path d="M13.354.646a1.207 1.207 0 0 0-1.708 0L8.5 3.793l-.646-.647a.5.5 0 1 0-.708.708L8.293 5l-7.147 7.146A.5.5 0 0 0 1 12.5v1.793l-.854.853a.5.5 0 1 0 .708.707L1.707 15H3.5a.5.5 0 0 0 .354-.146L11 7.707l1.146 1.147a.5.5 0 0 0 .708-.708l-.647-.646 3.147-3.146a1.207 1.207 0 0 0 0-1.708l-2-2zM2 12.707l7-7L10.293 7l-7 7H2v-1.293z"></path></svg>
+            </label>
+            <label>
+              <input type="radio" name="tool-select" value="shift" title="shift image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-move" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708l2-2zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10zM.146 8.354a.5.5 0 0 1 0-.708l2-2a.5.5 0 1 1 .708.708L1.707 7.5H5.5a.5.5 0 0 1 0 1H1.707l1.147 1.146a.5.5 0 0 1-.708.708l-2-2zM10 8a.5.5 0 0 1 .5-.5h3.793l-1.147-1.146a.5.5 0 0 1 .708-.708l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L14.293 8.5H10.5A.5.5 0 0 1 10 8z"></path></svg>
+            </label>
+          </div>
+          <div class="horizontal-capsule radio-select" id="brush-select" title="brushes">
+            <label>
+              <input type="radio" name="brush-select" value="0" title="1px circle brush"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAABlJREFUOI1jYBgFwx38/////0C7YRQMDQAApd4D/cefQokAAAAASUVORK5CYII=">
+            </label>
+            <label>
+              <input type="radio" name="brush-select" value="1" title="2px circle brush"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAABpJREFUOI1jYBgFwx38hwJ8apjo5ZhRMKgBADvbB/vPRl6wAAAAAElFTkSuQmCC">
+            </label>
+            <label>
+              <input type="radio" name="brush-select" value="2" title="3px circle brush"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAACNJREFUOI1jYBgFgxz8////PyE1jMRoZmRkxKmOYheMgmEBAARbC/qDr1pMAAAAAElFTkSuQmCC">
+            </label>
+            <label>
+              <input type="radio" name="brush-select" value="3" title="4px circle brush"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAChJREFUOI1jYBgFgxz8hwJ8ahjxaUZRyMiIVS0TeW4jEhDjhVEwGAAAJhAT9IYiYRoAAAAASUVORK5CYII=">
+            </label>
+          </div>
+          <div class="grid4 radio-select" id="color-select" title="colors">
+            <label style="background:var(--trans-gradient);">
+              <input type="radio" name="color-select" value="0" title="select color 0">
+            </label>
+            <label style="background: rgb(0, 120, 153) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="1" title="select color 1">
+            </label>
+            <label style="background: rgb(16, 210, 117) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="2" title="select color 2">
+            </label>
+            <label style="background: rgb(191, 255, 60) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="3" title="select color 3">
+            </label>
+            <label style="background: rgb(127, 6, 34) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="4" title="select color 4">
+            </label>
+            <label style="background: rgb(214, 36, 17) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="5" title="select color 5">
+            </label>
+            <label style="background: rgb(255, 132, 38) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="6" title="select color 6">
+            </label>
+            <label style="background: rgb(255, 209, 0) none repeat scroll 0% 0%;">
+              <input type="radio" name="color-select" value="7" title="select color 7">
+            </label>
+          </div>
+          <div class="button-row" id="toolbar" title="toolbar">
+            <button name="undo" title="undo"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"></path><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"></path></svg></button>
+            <button name="redo" title="redo" disabled=""><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"></path><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"></path></svg></button>
+            <button name="copy" title="copy image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"></path></svg></button>
+            <button name="paste" title="paste image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-data" viewBox="0 0 16 16"><path d="M4 11a1 1 0 1 1 2 0v1a1 1 0 1 1-2 0v-1zm6-4a1 1 0 1 1 2 0v5a1 1 0 1 1-2 0V7zM7 9a1 1 0 0 1 2 0v3a1 1 0 1 1-2 0V9z"></path><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"></path><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"></path></svg></button>
+            <button name="clear" title="clear image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"></path><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"></path></svg></button>
+            <button name="randomise" title="randomise selections"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-shuffle" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.624 9.624 0 0 0 7.556 8a9.624 9.624 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.595 10.595 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.624 9.624 0 0 0 6.444 8a9.624 9.624 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5z"></path><path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192zm0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192z"></path></svg></button>
+            <button name="import-palette" title="restart with imported palette" hidden=""><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-palette" viewBox="0 0 16 16"><path d="M8 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm4 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM5.5 7a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"></path><path d="M16 8c0 3.15-1.866 2.585-3.567 2.07C11.42 9.763 10.465 9.473 10 10c-.603.683-.475 1.819-.351 2.92C9.826 14.495 9.996 16 8 16a8 8 0 1 1 8-8zm-8 7c.611 0 .654-.171.655-.176.078-.146.124-.464.07-1.119-.014-.168-.037-.37-.061-.591-.052-.464-.112-1.005-.118-1.462-.01-.707.083-1.61.704-2.314.369-.417.845-.578 1.272-.618.404-.038.812.026 1.16.104.343.077.702.186 1.025.284l.028.008c.346.105.658.199.953.266.653.148.904.083.991.024C14.717 9.38 15 9.161 15 8a7 7 0 1 0-7 7z"></path></svg></button>
+          </div>
+        </section>
+      </main>
+      <div class="hanging-menu" data-hidden-in-player="">
+        <button name="play" title="playtest this flickguy">play</button>
+        <button name="export" title="export as webpage">export</button>
+        <button name="import" title="import from webpage">import</button>
+        <button name="reset" title="reset to blank">reset</button>
+        <button name="help" title="how to use this tool">help</button>
+      </div>
+      <div class="hanging-menu" data-hidden-in-editor="" hidden="">
+        <button name="export-image" title="download as image">save image</button>
+        <button name="randomise" title="randomise selections">randomise</button>
+        <button name="edit" title="remix this flickguy">remix</button>
+      </div>
+    </div>
+    <script id="bundle-embed" type="application/json">{"project":{"palettes":[["#000000","#94216a","#ff2674","#ff80a4","#34111f","#73392e","#c76e46","#ffb762"],["#000000","#d62411","#ff8426","#ffd100","#73392e","#c76e46","#eb9c6e","#ffdaac"],["#000000","#007899","#10d275","#bfff3c","#430067","#94216a","#ff2674","#ff80a4"],["#000000","#94216a","#ff2674","#ff80a4","#002859","#007899","#10d275","#bfff3c"],["#000000","#d62411","#ff8426","#ffd100","#1b1023","#002859","#007899","#68aed4"],["#000000","#002859","#007899","#68aed4","#430067","#94216a","#ff2674","#ff80a4"],["#000000","#007899","#10d275","#bfff3c","#7f0622","#d62411","#ff8426","#ffd100"],["#000000","#002859","#007899","#68aed4","#7f0622","#d62411","#ff8426","#ffd100"]],"layers":[{"options":[{"image":"14409","palette":2},{"image":"14553","palette":1},{"image":"14588","palette":4},{"image":"14544","palette":7},{"image":"14596","palette":0},{"image":"14570","palette":3},{"image":"14472","palette":6},{"image":"14579","palette":3}]},{"options":[{"image":"14589","palette":0},{"image":"14569","palette":4},{"image":"14604","palette":6},{"image":"14525","palette":7},{"image":"14408","palette":4},{"image":"14587","palette":0},{"image":"14554","palette":2},{"image":"14578","palette":2}]},{"options":[{"image":"14519","palette":3},{"image":"14555","palette":1},{"image":"14590","palette":7},{"image":"14528","palette":2},{"image":"14598","palette":5},{"image":"14581","palette":4},{"image":"14572","palette":1},{"image":"14563","palette":5}]},{"options":[{"image":"14564","palette":1},{"image":"14493","palette":7},{"image":"14520","palette":3},{"image":"14599","palette":0},{"image":"14421","palette":0},{"image":"14368","palette":3},{"image":"14582","palette":5},{"image":"14556","palette":4}]},{"options":[{"image":"14325","palette":3},{"image":"14458","palette":7},{"image":"14565","palette":2},{"image":"14600","palette":5},{"image":"14548","palette":5},{"image":"14592","palette":3},{"image":"14574","palette":6},{"image":"14539","palette":5}]},{"options":[{"image":"14540","palette":6},{"image":"14593","palette":6},{"image":"14566","palette":3},{"image":"14549","palette":7},{"image":"14575","palette":6},{"image":"14504","palette":7},{"image":"14531","palette":7},{"image":"14601","palette":2}]},{"options":[{"image":"14576","palette":4},{"image":"14594","palette":0},{"image":"14371","palette":5},{"image":"14550","palette":1},{"image":"14406","palette":2},{"image":"14559","palette":6},{"image":"14505","palette":3},{"image":"14602","palette":4}]},{"options":[{"image":"14551","palette":6},{"image":"14542","palette":5},{"image":"14595","palette":2},{"image":"14560","palette":2},{"image":"14515","palette":3},{"image":"14586","palette":0},{"image":"14470","palette":4},{"image":"14603","palette":7}]}]},"resources":{"5588":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACgElEQVR4nO3cQW7jQAxE0b6KNzmc1zlK7uusAgi2ZMlRd39S/A+o5RgKq+LJDBC3JkmSJEmSJEmSJEmSJEmSJEmSJEmIx9f342zor0Ef6FG4w0hmZumOIpCf2x0v3CFAIpfvCAbLUL5DGCRb+Y6ho+zlO4QTrlT+mRH83O6PI+l9f8zfF0SXRQ7gaOmXG8KVyz8yhDPFpx9BlfK3RtCr/JQjWD44Xczs9C4+3Qgsf2zoft96fli6EAcw0drD0oVccQAhR2D5xd8FHEDhdwHLLzwAy+dGQHffWvOn/tIj8LufH4EDSJISA6CPnCEOoHgcgHEA1eMAimftdulGsPYg9GEz5XIDoA+aLVvfRA6gSBxA8Wzd0QEUigMoHgdQPFu3DF++A+g7gLV7OoAC2btp2PLXHpY+ZsYcvW248tcekj5mxtAdnuIAHMDL2xJ90GyhOzzNETgAB1B5AK29jqC1WB/6GDl0d908/9OEPmyWkJ0NRx83Q+iOhqKPmyF0R8PRB44cupsp6CNHDt3NFPSRI4fuZhr60FFD9zINfeiooXuZij52tNB9TEcfPFroPhD00aOE7gFDHz5K6B5Q9PHp0PfH0QVYfAB0GZYPowux/ADoYhwAjC7G8gOgC7J8GF2SxcPosiwfRhdm8TC6OIuH0QVaPIwu0uIBGX+FjL5Zau8+4GB55NHD+M/r07dLbe+TLbbKGTWCT16bvt0lvPsok73yqREQdyrp6ABmjYC+RzmjBnD0z4T7sKVqRg/gyFu8IwDNGMDRt3iHANgr7szf/5+W6QAgvX+4OzMCgXqVvnxNv6sT6lH8kiPQ2/+MUhEOQJIkSZIkSZIkSZIkSZJ0Ib8DYy6z8pezvQAAAABJRU5ErkJggg=="},"14325":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14368":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAfElEQVR4nO3QMREAIRAEwZODJfwLgYiM+H/r6FYwNVUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMB7xlw15vo74yq5rYUzOHF0clsbyZOT21pJHpzcBgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8YgOhfCQBTOMAHAAAAABJRU5ErkJggg=="},"14371":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14406":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14408":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACcUlEQVR4nO2cXW7CYBAD9zhciZv0Kj0tfapEaYC0+fF6PSP5EemLPYkEUqgCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANDw8XnbHDBij8ERw4wzR0eKRlyu+sERQUTn8ZHgYBzGR4SDcBsfGXbEfXxE2MCk8bdIcLneVmUM3xekHkspwNrRx4kwefw1ImwZ3l6ClPGfSbDX+JYS3B9cPczZ2Xt4OwkYP1iCx8OqB0GAE1k6rHqQiQK0lIDxw58CCBD8FGD8YAEYXydBCxg/WALufr0ECGCSCAHUJTsEAcKDAAQB0oMA4Vnqzk6CpYOoi3XKOAHUhbrl2U2EACFBgPA86xEBgoIA4UGA8Dzrsv34CLCvAEt9IkBA3nXadvylw6rLdMzabtuNv3RIdZmOsQYBEAAJkgWoQgIEQIBsAap+S1DV608fO2cMj19N1MW6ZDTqch0yGnW5DhmPumCXjEVdrFNGoi7VLSNRl+qWcagLdc0o1GW6ZgzqIt0zAnWJ7rFHXeCE2KMucEKsUZc3Jdaoy5sSW9TFTYsl6tKmxQ51YVNjhbqsybFAXVJCWqMuJyVtUReTkraoi0lJW9TFpKQt6mJS0gpeIQsT4NUfHNwf8mgxksVrN3zVz8f/GS+YIoBQgEfejY8EAwR4xVoBkAAB/jXuXyRIEKEdRwuABAiw+rMJIrTj3QhbxkAAAwGqjv0VcPqgIwSoOk6ChLsaAZDAW4AzLhwBmgpw5sUjQDMB1GUkpg3qIlLTAnUJyWmBuoTkyFEXkB7GDw/jh4fxw8P44WH88CBAeBg/PIwfHsYPD+OHh/HDgwDhYfzwMH52vgDnM+sNFTrroAAAAABJRU5ErkJggg=="},"14409":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLklEQVR4nO3SoQEAIAzAsB3G75w2zkA0Ir6ic/csXfM7AANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIO4BXclLI7CzwLsAAAAASUVORK5CYII="},"14421":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAfklEQVR4nO3QMQ0AIRQFQSygABP4t8ZV19ESXj4zCjbbGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwqNnHmn2s2x07yW0l/IMTRye3lZE8ObmtlOTByW0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMBpH1EiIUn7GoIDAAAAAElFTkSuQmCC"},"14458":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14470":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14472":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLUlEQVR4nO3SIQEAMAzAsPl3d0WbjIMGhBd09s3SNb8DMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4g4zTsp+cPc7OAAAAABJRU5ErkJggg=="},"14493":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAiElEQVR4nO3SsQ2AMBADwFQZhEUzOlRIKUL7MXAnfW/53RoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8FOjH+d9u7NQbH5+4gjS873equCUkp+ypeT7hOSCDaBAcsEGUCS5XM8HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC6s6mSPJCocPwAAAABJRU5ErkJggg=="},"14504":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14505":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14515":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14519":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAkElEQVR4nO3SQQrAIBRDQQ/Wu/dodlsKbm2IM+A+vO8YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJzrntd8v7/3sNH3+EmfIHlbhVXghNDJ22okR07eViM5cvK2GsmRk7dVSQ7sA2ySHtbxAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI73AJRNKVS3tlfSAAAAAElFTkSuQmCC"},"14520":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAfElEQVR4nO3QsQ0AIRAEsSuHlui/EIjISF+/OuwKRlMFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCTxlw15vo74yq5rYUzOHF0clsbyZOT21pJHpzcBgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADA9zbJtCQBddEhwwAAAABJRU5ErkJggg=="},"14525":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACnUlEQVR4nO3dO24cURBD0Yq8EEfeklfjpduR4cCt6c/rbhZZ9wCMhcciRoKSqQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIf8+Pl7Mwj21dGjRhD7sAVHD2/fVezDLrpyeNueRjzyhA/v/vXt+2a8uxmz9ANOHt5/BFdXvvrQjqO7ePioAZx+6N6DV36XvjmIxeN7DuCutW89+unD3z2IxeOPG8CXI+iYkz2MHMDyg53yoYerXfgN4O7Fh+Tq8ccNQH0oBrBq4eHqIzGAOzCAW0fgdfyqywNQH6frCLyOX8UAbh7BiAGoD9J5DAwgPFnHrzo9APUBOiRrAFWn/hOoLr9Lco5fdfhTQF16+9g6s3ASOICq3U8BebkOsbYzAEaQfPwqBjB+AFX8Ghh9/KqPfwzKS+6cKOoy3RJJXapTIqlLdUosdbEuiaUu1iXR1OU6JJq6XIfEUxfcPSOoS+6cMdRFd80Y6qK7Zgx10V0zgrrkrhlBXXLnjKAuuXPiqQvunnjqgrsnmrpch0RTl+uQWOpiHRJNXa5DoqnLdUg0dbndE09dcPfEUxfskGjqcl0SS12sS2Kpi3VKJHWpTomkLtUtcdSFuiWOulC3xFEX6pgo6jIdE0VdpmtiqIt0TQx1ka6JoS7SORHUJTongrpE50RQl+gee+oC3WPv6RLUB2IEBzz5WPVxGMABTz5SfRxGcMCTj1MfhgEc8PTD1MdhBDsYAAN49EHqwzCAz3a/QPIO6uMwgG2Hvyl7lfo4jGDbqa9LX6E+DAPYxgAGD+DM8RlA4AheHUDVnBG4YAAMgAEwAAYwdgSvHr+KAXTz6vH/Uh+GAfzz+vGr5gwgYQSP/ED1URjA/147ftWsATiN4DXqgzCABtRHMRjAH+BkuSPj44E+AAAAAElFTkSuQmCC"},"14528":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAu0lEQVR4nO3SQQqEMBAEQB/m332anhaEZRHjmkyTKsg5TU8vCwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwJdtX/fPG52Fjs6HHzWCkX9P69fhex/hKodh/Fm1su8MwBAeqFpyywCM4KbKBRvAy6oXXD1fvISCq+eLZgCTSxhAS87e+WIlHL8l66iMkdKKTcgYJ+X4Zyk56cDxAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgXgfyozSiHXspZQAAAABJRU5ErkJggg=="},"14531":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14539":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14540":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14542":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14544":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABL0lEQVR4nO3SIQEAIBDAwI9LOtLQB2IgduL8xGbtc+ma3wEYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2CAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxD4llSudkZUnEAAAAAElFTkSuQmCC"},"14548":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14549":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14550":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14551":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14553":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLUlEQVR4nO3SIQEAMAzAsPl3d0WbjIMGhBd09s3SNb8DMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4g4zTsp+cPc7OAAAAABJRU5ErkJggg=="},"14554":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACv0lEQVR4nO2cS07DQBAF5yqchcMgcR7um6yQosSfSeyZ6nZXSb1EMq+KCBa4NRERERERERERERERERERERERERERERERERERhL+v39vRo78HeYMzhBtGMmZKN4pA0LINAYQWbAQgtFhDAKFlGgMILc8QQGhhUSL4bj+3njt7f4z/b4iWRQbQK/1yIVxZfk8IR8Snj6CK/LUIzpKfMoLHB6fFzL6zxaeLQPljj/a7yfPD0kIMYCJLD0sLuWIAISNQfvFPAQMo/Cmg/MIBKJ+LgHbfWvO3/tIR+NPPR2AASa5EAPTIGc4Aip8BeAZQ/Qyg+C1tly6CpQehh810lwuAHjTbrf0QGUCRM4Dit7ajARQ6Ayh+BlD81rYML98Azg1gaU8DKHB7m4aVv/Sw9JgZr3fbcPKXHpIeM+PRDg9hAAbw8rFED5rtaIeHMQIDMIDKAbT2GkFr13wVjAFs8PynCT1sliOdDYceN8PRjoZCj5vhaEfDoQeOfLSbKdAjRz7azRTokSMf7WYa9NBRj/YyDXroqEd7mQo9drSjfUyHHjza0T4Q6NGjHO0Bgx4+ytEeUOjx6aP3x6EFKD8AtAgDgKFFGEAAaBkGAEPLMIAA0EIMAIYWYgAwtBADgKGFGAAMLcQIYGgZBgBDyzAAgOr/QkbvP52tFxw8DjM6jCjh0T6msfdmizU5oyQZwGS2XmWyJ//KERAuwtEbwBUjoLcPwagAer+GfJ8BvX0IRgcQOQJ6+xDMCKD3a2eHQG8fgj0JR2QYQBJGjkz/omcAbzA6gGgR0HuHpUoE9M7p+TQCWrwBnMSnnwS0eAM4EVqiAcDQEg0AhpZoAAGgRRoBDC3RAGBoiQYAQ0s0ABhaogEEgBZpBDC0RAOAoSUaAAwt0QhgaIEGAEMLNAAYWqARgNDiDACGFmcEMLQ0A4ChpWUK4A5l8+1eYlbiAwAAAABJRU5ErkJggg=="},"14555":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAApUlEQVR4nO3TQQ5AMBRF0e5/d1bE1IDQJvQ/zknMX26/1gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4p3Vp69E3e9dewsZIZ2GrBL7aV2FjrDtxZwa+u88RDEiIm7AxVvW4PfscQKeEuAkbY/XGfTtw9X2fUDXwyOM7gAf4+5nG4wIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHBqAzcwFcHiT6g1AAAAAElFTkSuQmCC"},"14556":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAfUlEQVR4nO3QoQ0AIRQFQUrAI+m/Rk6dwxJePjMVbLY1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN42+lyjz3W7Yye5rYR/cOLo5LYykicnt5WSPDi5DQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgGM+MgUfOf3zgBcAAAAASUVORK5CYII="},"14559":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14560":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14563":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAtElEQVR4nO3UMQqAMBREQY/uYbyntiIoVsmuzoD98n5wWQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgJ/Z120/f7P3MND1+F94BO37h7p7AG0R2/dP8/QA0kM2b4/xJmJayMbNsd7GTAnatrdCS9SWnZUa4jZsrJYeN33fJ6QGdvyBEiM7/gRJkR3/5xyfqD8SEzk+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXBzKhkgNZVQmrAAAAAElFTkSuQmCC"},"14564":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAe0lEQVR4nO3SwQkAIAwEwVTk37rSP/qyBPGQmQqOZKsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKrnWD3Her2DB87zUyNI3fWN5ACSt30l9cACIDZOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAu2g1oLFlq4qXXAAAAAElFTkSuQmCC"},"14565":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14566":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14569":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACNklEQVR4nO3ZW04qURBA0TMcp+RM7lQcrX51rjEgjRyo19pJfZJA1aJJdC1JkiRJkiRJkiRJkiRJkiRJkiRJkiRJkqRX9+/jc/uoQM84PCSJenv/XG/v/xcdfXAwXthx/GOijwrCC/t5/KoAQPhDl45fHQAEJ+t6fAhO1P34PxF8/4zjm3L8Yy591rFNO/41ACMhTDz+LQBjEEw8PATfAmAwgunHPwugLQIABgNw/PsAtEPg+IOfAr79w58Cjj/4KeDbDwAADwAoj8DxBwPw7d8DoCwCxwcAgE0ASiIAAAAAAABgF4ByCAAAAAAAAAAAAAAA2AOgFAIAAADgCQjKBAAAADwBQBkEl9549NIzDQDDpz2AtfwMAADAUwCUQQAAAAAAAMEzAJRAAAAAAAAAAAAAAADAfgSpu/amo5eeaQAYPgAMn7YAfnvT0UvPNAAMHwCGDwDDBwADwPRpd/yjWwAgaQ5grd+fBLcm+jAAbAyAwQA8AfYjKJOfgP0Ajtek75HjA3BuJ2l79PjTAJxBcO11KdsBAIJze0gZAK+ddAEAAAQAAAAAABA4/lAAa/lL4HgAa/lH0HgAa92HIHqRlSd99x7+VtELzzbjil54thlX9MIzzqiil51xxhS96MwzouglZ54RRS85+7QvesHZp3XRy60ybYtebJVpW/RiK03LopdaaVoWvdRq067ohVabVkUvs+q0KXqRVadN0YusOm2KXmTVaVP0IqtOi6KXWHlaFL3EwvMFRx26h8QtQPoAAAAASUVORK5CYII="},"14570":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLklEQVR4nO3SoQEAIAzAsB3G75w2zkA0Ir6ic/csXfM7AANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIO4BXclLI7CzwLsAAAAASUVORK5CYII="},"14572":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAwElEQVR4nO3UwQnDMBBEUfVfiytKM/Y5hwSkZOVh/R74/tEOHgMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGCcr+P89N3dRqFvh797CEktLc0cf/fjp3S0tXr8HY+f0tFalwEYwaJfB1D58CkdraUOIKmltdQBrLZVtbT1jwEk/QUqOtpLHcBKW1VHe6kDmG2r7HiEtOPPtO3qeIyk4wMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMCbCyHNQhUYRTg5AAAAAElFTkSuQmCC"},"14574":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14575":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14576":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14578":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADJElEQVR4nO2cQW7bQBAE9zX5iB/jD+SQo7/hu/+pnBQEAiWR3NX0dKsK6GNisraoKBLgMQAAAAAAAAAAAAAAAAAAAAAAAGCGP9+Xf4M34//DJ4CDuEu7PXzneynHXdzW4bveSznu0h4dvtu9SHCW9uzwne5FhrM4ApjEXRwBTJAgjgAmcBd3c70f4/PyMT797kPCniens7w7h78ZAWxAAG/O3gA6Cty4xocBdLwHKQ8EpgTAq8Aj3J+eHYdPAI84+vR0E0gAE+x8+Wwr0P36pdx5k7dLYBeJ7tcvJTCAe9fe9vplPPhv3m6BaokHrp0Abjl4+HcDUIo8cO0EcMvKAFQyZwN42whOHH67AE5cP68CV14RQLXME4dPAGOcevO3O4AqoSeffgIY4/UBVEglgAlOHn6bACYC5o3gK+RVRnDk52/cU4v3LlIqA1gp9ujPVV1new4+MdMBbMl99WESwR1Oipk6fKfFoxbssGjUch0WjVquyyJRS3VbHGqhbotDLdRtcaiFui0OtVC3xaEW6rgo1DIdF4VapuOiUMt0XBRqmY6LQi3TcVGoZTouCrVMxym5fP2svQC1TMcpWRqAWqTrlBBAgykhgAZTcfn6uRBAg6ngDWCTqSCAJlPA4TeaAgJotGqWH/4YBOAUAQE0XCW8/DdcJQTQcJUQQNNVQQBNVwUf/zZeFcsiUAtLWxXLvghSC0tcFQTQdFVMB6AWlboqpv8ZUItKXSVTEahFpa6aUwGoJaWvEgJouioIoOmqIIDGq2BVAEt/7y/zCuAlv/yZ5QRABARABB0jOP1B0MkAiKBhAKf+4EQARNAkgJUfAxOAYQSrvwgiAALg8F0CeMVXwRy+WQDTf8mBAOQCE7aSawDXV4Kn+/V7c88ikEtL2mpmD/9ZBHJhiXMIgJkEsCKCMQZfDbtHsAS1lHdaW1ZcrFquw6JRy3VYNGq5DotHLdhh0ajluiwWtViXRaOW67Bo1HIdFo1arsOiUct1WTRquQ6LRi3XZbGoxbosFrVYl0WjluuweNSCuy8etWCHxaMW3H3xqAU7LBq1XIdFo5brsBv+AsYZUhJBM1O4AAAAAElFTkSuQmCC"},"14579":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLklEQVR4nO3SoQEAIAzAsB3G75w2zkA0Ir6ic/csXfM7AANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIO4BXclLI7CzwLsAAAAASUVORK5CYII="},"14581":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAA2UlEQVR4nO3SwQnDMBAEQJXgv59uLtWlmvSjvAIhxMFyLOvOzIC+4tjdUgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKap6XO01JH38GHVzG9ynn/3wiC6V3Ot/8NIJDeBSk/gV4jUH4iayPYW5ryEzpqBMpPzAA4pEDlX4ACk7vdH3Xtjb6tlPj3pfYr3NFhR77tEloCPjvoPbcZQ6OoIf9zlyE0iBqu8k8SNUyFnyhioMpn0whG3wgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACM9ATwxXuCHqteaAAAAABJRU5ErkJggg=="},"14582":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAnUlEQVR4nO3TwQ2AIBREQXqzGK2OaugHTyTGu7rgTAUb/qMUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP5tK3vfyt6/3sHLjtr6UVsfASRGkLpreuP49wi+3jXMEOfUkgNI3raU1F8mgBddj5/0yKlxLin5gZO3AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADPOwE2c3r5V1s2qAAAAABJRU5ErkJggg=="},"14586":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14587":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADbUlEQVR4nO2cy23kMBBElYIjMJyDo9p4Nt/xZRcwZErmp1uPRdYD6uzWq9JgfJnjMMYYY4wxxhhjjDHGGGOMMcYYY4wxxhgzwN+PP6//oW8xD/O9fA+gEXVp5/KVn+Vx1MWVyld9lsdRl3ZXvtqzIChL+618pWfBUBbnAQyiLs4DGGAFcR7AAOrizvd+vr2/Pt/e5Z4DoebNmVneVfmlEdC3TokHsDm1A5hRYOnGuwHM+AwodwJXGYA/BW5Qf3tqyvcAbmh9e2YT6AEMUPvxOatA9ftRrr7k1QicRaL6/SgrDuDq9lnvx7j7N69WIC2x5XYP4ERr+VcDIEW23O4BnIgcACVzdADbjqCn/NkG0HO/PwX+kTGAp2X2lO8BHH1f/moH8JTQ3rffAzjyB/CEVA9ggN7yZxnAyIC3/yKYIe/JEbT8/dIzzfDdBeXJAUSKbf271J3T0/rGjA6gJDe7TI/ggl4xI+Urhe4nHVqwQuiOUqHlKoTuKBVarkronlKgpaqF7iscWqha6L7CoYWqhe4rHFqoWui+wqGFqoXuKxxaqGLozkKhZSqG7iwUWqZi6M5CoWUqhu4sFFqmYujOQqFlKobuLBRapmLozkKhZSqG7iwUWqZi6M7CoEWqhu4tDFqkaujewqBFqobuLQxapGro3sKgRaqG7i0MWqRq6N5CoCUqh+4uBFqicujuQqAlqofubxhaoHro/oag5a0QusMhaHkrhO5wCFreKqF77IYWt0roHrugpa0Wus9maGGrhe6zGVrYiqE7bYKWtWLoTquhRa0autdqaFGrhu61GlrUqqF7rYKWtHrofn+FFrRD6I5voeXsELrjW2g5u4Tu+ZLSsZG/++uIDSDjx5+dhQbgEXgAHsFKI+gdgEfgAXgEHoAHID+C0pEegAfg8j0Al7/FAI6j7XsALXCF0H3/oHSki998AN9HQAtbMXTnP6CF7Ba67yK0lN1C912ElrJT6K4viTiWlquQjO6mgZarELqjVGi5CqE7SocWrBC6o1RouSqhe0qDFqsSuqdUaLkKoTtKhZarELqjVGi5CqE7SoWWqxK6p1RouQqhO0qFlqsSuqc0aLEqoXtKgxarErqnVGi5CqE7SocWPHvoftKhBSuE7igdWvDsoftJhxasELqjVGi5CqE7SoWWq5Czsy9nliDUB/axFwAAAABJRU5ErkJggg=="},"14588":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLUlEQVR4nO3SIQEAMAzAsPl3d0WbjIMGhBd09s3SNb8DMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4g4zTsp+cPc7OAAAAABJRU5ErkJggg=="},"14589":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAACMElEQVR4nO3aQW7TYBRGUW+lExbXMUvpfsuESiEKJbZDruN3jvTm5P8uQa1YFgAAAAAAAAAAAAAAAAAAAAAAAACA0OePn59rrv7zstLagfde/Xn57dnDC+IA6rGFEKnHFcIT1QMK4ck+3t4/P97e88EefV+fq37fQzv7+N9d/fap68eoBysCGBvB2cf3LfAPE8YXwF9M+dsvghumjS+ACxPHF8GFqeMLYJk9vgAWAYz/nYAABDB2fAEsArg3gNNGMHl8ASwCEMCdASzLef4ziAAurPkGWJbzRSAA/wTMjWD6TwDjvwUEIAABCEAAAjjACK8SwKkiEMDgAIy/PYBTRCAAAQhgegD1wx/ltgTw8hEIYHgA9aMf6QQw/LYG8NIR1I9+pBsXQP3gRzsBDD8BDL89AbxkBPWDH+0EMPxGBVA/9hFPAMNvbwAvFUH92Ec8AQy+r3cRwLC7fhcBDLzLdxkZwL0frh7qGRGMC2DtB6yHEsCDbA3g7BGMCmDrh6yHEsAD7AlABALIhxLATgJ4fAD1pqsJ4HEB1FtuJoD9EdQb7mb87QHU2z2M8f8M4J43Kff676aNfiuA63cYM/61epA6Am6oBxLAAdWjCSBUDyaCWD2WAGL1WAKI1WMJIFQPJYJYPZIAQvVAAojVAwkgVg8kglg9jgBi9TgCiNXjCCBWjyOCWD2MAGL1MCII1YMIIFYPIoBYPYgIYvUYAojVYwggVo8hglg9hABi9RBnjeAX6SCzrhb+e4AAAAAASUVORK5CYII="},"14590":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAuUlEQVR4nO3YMQqAMAAEwfz/d75IWxFFrbyLM2B/bIJFxgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgEbrMtb99/WeSseI6SHP9rZsj9MW825v4uZYT2ImBW3bG+9p0ISoTVtrvIn6ZdiGjbXS47Zc0lrpgZO3TSM1cuqu6aT+BRI3TSsxdtqeqbkAxL2ype35jZTYDp7h0AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgCsb2/3rNa5p2csAAAAASUVORK5CYII="},"14592":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14593":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14594":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14595":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14596":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABLklEQVR4nO3SoQEAIAzAsN3Kk5w3zkA0Ir6is/csXfM7AANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADIABMAAGwAAYAANgAAyAATAABsAAGAADYAAMgAEwAAbAABgAA2AADBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIM4AcQaIM0CcAeIMEGeAOAPEGSDOAHEGiDNAnAHiDBBngDgDxBkgzgBxBogzQJwB4gwQZ4A4A8QZIO4B/cfLjNU3m+YAAAAASUVORK5CYII="},"14598":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAlklEQVR4nO3SsQ3AIBAEQUp3Me4TRw5tkfHHz0jkq+PHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKCfed3z6+1ue1Xvi/X3+VVGrt4Xa+Xzdw+c0BhrddydA1fvi+YAmnMAzTkAIgau3HaM6gNXbjuGYQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIjwAIsvDm+HFtgRAAAAAElFTkSuQmCC"},"14599":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAfklEQVR4nO3QMQ0AIRQFQSygABP4t8ZV19ESXj4zCjbbGgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAO+afazZx7rdsZPcVsI/OHF0clsZyZOT20pJHpzcBgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMBRH6IUIUmA+Gi3AAAAAElFTkSuQmCC"},"14600":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14601":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14602":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14603":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAVklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOBvAI8AAT4ZY7sAAAAASUVORK5CYII="},"14604":{"type":"canvas-datauri","data":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAADKUlEQVR4nO2Z3W3bQBAGr4S4ByMdBkgBacJlOQ9uR3mxHFkgpePxyNm7nQH2xQZk85vxH1yKiIiIiIiIiIiIiIiIiIjIfPz4++uy9ejPWTbSItkYBuVI2YYQGEq8EcDQ0o0BghZsBCC0WEMAuY56eS/fjpZsBCewJn+UCAxhB7cj1gYQNQx6y+FYk//obZEDMIIN1HxVb4kiytG7DsHScHsDiBIGve0QbA1gTXTUXxrpfcOzJv9ZACPIN4IKngWwJnUE8QZQwaMAZpBvAA9YG+yZ2KX3RY6A3jksrYPWRhHp6K1D0ntkAxgMWooRwNBCDACGFmIABL/fLluPFmcAPWgQf8QZwdkEkB4pAlrHuQSQHS0IWsk5BJAaNQZazbEEEBg9AlrRcQQQN0IQtKZjaBz28udn1fUS2fv1DaCUw+X3knXGx6iJhNbVl62DfNIqv1ZUr9fvFYMBfPLx+nL5eH3pKujs2xPB9flJZX2pFF/Kf/kzRNASxO2zU7r6UyH+yozyl+5L8or8+QNYYNav/mcRPLqzVR2H8pMH8ICM8o3ghqzyDaDklm8AxQBqApg6AgMwgLTyDaAYQG0A00aQWb4BFAMwgMoASun37+FIZwAbvgOUMl8EBuCPgLwRZP8LIP13AQMwAAMwAAMwgAASRglgqggMIHEAym8PYIoIDMAADCB7APTwUa4lgOEjMIDkAdCjRzoDSH6tAQwdAT16pEsXAD14tDOA5GcAyW9PAENGQA8e7Qwg+aUKgB474hlA8tsbwFAR0GNHPANIfNddDCDZ3e9iAAnvdpeUAdQ+HC3qjAjSBbD1AWlRBtCJ1gBmjyBVAK0PSYsygA7sCcAIDAAXZQA7MYD+AdBON2MA/QKgXTZjAPsjoB3uRvntAdDuuqH87wHUbEL6Opxs0pcCuN8hjfx7aCF0BLIALcgAAkJLMwAQWpgRwNCyDACGlmUAMLQsAwChRRkBDC3JAEBoQQYAQwsyABhakBHA0HIMAIaWYwAwtBwDgKHlGAEMLcYAYGgxRgBCCzEAGFqIAcDQQowAhpZhADC0DAOAoWUYAQwtwgBgaBGzRvAPFQocbPAn78gAAAAASUVORK5CYII="}}}</script>
+    
+  
+</body></html>
