@@ -126,7 +126,7 @@
 
   <body>
     <div class="wrapper is-loading">
-      <canvas width="640" height="480"></canvas>
+      <canvas width="300" height="300"></canvas>
       <video hidden></video>
       <div class="lds-roller"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
     </div>
@@ -155,6 +155,8 @@
       // let hasRendered = false
 
       const wrapper = document.querySelector('.wrapper')
+
+      let o = 0
 
       // ctx.fillRect(10, 10, 150, 100);
 
@@ -192,7 +194,8 @@
           // array of detected faces from the MediaPipe graph. If passing in a video
           // stream, a single prediction per frame will be returned.
           const predictions = await model.estimateFaces({
-              input: video
+              input: video,
+              predictIrises: false,
           });
 
           // hasRendered = true
@@ -234,17 +237,80 @@
 
               for (let i = 0; i < predictions.length; i++) {
                   const keypoints = predictions[i].scaledMesh;
+                  const topLip = keypoints[13]
+                  const bottomLip = keypoints[14]
+                  const septum = keypoints[2]
+                  const [x1, y1] = topLip
+                  const [x2, y2] = bottomLip
+                  const [x3, y3] = septum
+                  const opennessThresholdA = 0.3
+                  const opennessThresholdB = 0.6
 
-                  // drawPoint(keypoints[1][0], keypoints[1][1])
-                  // drawPoint(keypoints[6][0], keypoints[6][1])
+                  const lipsDistance = Math.sqrt(Math.pow(x2-x1, 2)+Math.pow(y2-y1,2));
+                  // console.log(lipsDistance)
+
+                  const topLipSeptumDistance = Math.sqrt(Math.pow(x3-x1, 2)+Math.pow(y3-y1,2));
+                  const openness = lipsDistance / topLipSeptumDistance;
+
+                  const dO = o - openness
+                  o -= dO * 0.2
+
+                  if (o > opennessThresholdB) {
+                      ctx.fillStyle = 'red'
+                      ctx.fillRect(0, 0, canvas.width, canvas.height)
+                  } else if (o > opennessThresholdA) {
+                      ctx.fillStyle = 'blue'
+                      ctx.fillRect(0, 0, canvas.width, canvas.height)
+                  }
+
+                  // ctx.fillStyle = 'white'
+                  // ctx.fillRect(0, 0, 8, canvas.height * o)
+
+                  ctx.lineWidth = 2
+                  ctx.strokeStyle = 'blue'
+                  ctx.beginPath()
+                  ctx.arc(100, 100, 100 * opennessThresholdA, 0, 2 * Math.PI);
+                  ctx.stroke()
+
+                  ctx.lineWidth = 2
+                  ctx.strokeStyle = 'red'
+                  ctx.beginPath()
+                  ctx.arc(100, 100, 100 * opennessThresholdB, 0, 2 * Math.PI);
+                  ctx.stroke()
+
+                  ctx.fillStyle = 'white'
+                  ctx.beginPath()
+                  ctx.arc(100, 100, 100 * o, 0, 2 * Math.PI);
+                  ctx.fill()
+                  // ctx.fillStyle = 'white';
+                  // ctx.fill()
+
+
+                  // drawPoint(keypoints[3][0], keypoints[3][1])
+                  // drawPoint(keypoints[4][0], keypoints[4][1])
 
                   // Log facial keypoints.
                    for (let i = 0; i < keypoints.length; i++) {
-                       const [x, y, z] = keypoints[i];
+
+                   const [x, y, z] = keypoints[i];
                        drawPoint(x, y)
+                       // ctx.fillStyle = 'white';
+                       // ctx.font = "8px monospace";
+                       // ctx.fillText(i, x, y);
 
                        // console.log(`Keypoint ${i}: [${x}, ${y}, ${z}]`);
                    }
+                  
+                  // ctx.fillStyle = 'red';
+                  // ctx.beginPath()
+                  // ctx.arc(x1, y1, 3, 0, 2 * Math.PI);
+                  // ctx.fill()
+                  
+                  // ctx.fillStyle = 'white';
+                  // ctx.beginPath()
+                  // ctx.arc(x2, y2, 3, 0, 2 * Math.PI);
+                  // ctx.fill()
+
               }
           }
           window.requestAnimationFrame(renderFace)
