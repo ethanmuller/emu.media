@@ -45,9 +45,6 @@
       let model
 
       const canvas = document.querySelector('canvas');
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-
 
       const ctx = canvas.getContext('2d');
 
@@ -141,6 +138,9 @@
       }
 
       async function setup() {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+
           // Load the MediaPipe Facemesh package.
           model = await faceLandmarksDetection.load(
               faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
