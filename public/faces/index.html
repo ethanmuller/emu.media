@@ -25,7 +25,7 @@
 
   <body>
     <canvas width="640" height="480"></canvas>
-    <video></video>
+    <video hidden></video>
 
     <!-- Require the peer dependencies of face-landmarks-detection. -->
     <script src="https://unpkg.com/@tensorflow/tfjs-core@2.4.0/dist/tf-core.js"></script>
@@ -45,6 +45,10 @@
       let model
 
       const canvas = document.querySelector('canvas');
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+
+
       const ctx = canvas.getContext('2d');
 
       ctx.fillStyle = 'white';
@@ -141,7 +145,7 @@
           model = await faceLandmarksDetection.load(
               faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
 
-          video.addEventListener('click', main)
+          canvas.addEventListener('click', main)
       }
 
       video.addEventListener('loadeddata', setup)
