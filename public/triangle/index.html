@@ -67,6 +67,47 @@
       #ig:target {
         /* display: block; */
       }
+     ol {
+         padding: 3rem;
+     }
+     p {
+         font-size: 0.8rem;
+         max-width: 15em;
+     }
+     .form-label {
+         display: block;
+         font-size: 0.8rem;
+         text-transform: uppercase;
+         margin-bottom: 0.5rem;
+     }
+     form {
+         margin-top: 1.5rem;
+     }
+     form input {
+         font-size: 0.7rem;
+         padding: 1rem 1.3rem;
+         letter-spacing: 0.05rem;
+     }
+     form button {
+         font-size: 0.7rem;
+         padding: 1rem 1.3rem;
+         background: #ccc;
+         border: 3px solid;
+         border-color: #fff #eee #aaa #bbb;
+         letter-spacing: 0.05rem;
+     }
+     form button:active {
+         background: #aaa;
+         border-color: #777 #888 #fff #eee;
+     }
+     .email-signup {
+         background: #efefef;
+         margin-top: 3rem;
+         padding: 3rem;
+     }
+     body {
+         background: white;
+     }
     </style>
 
   </head>
@@ -75,9 +116,19 @@
     <main>
       <ol class="listing">
         <li>
-            <a href="/triangle/NATURE_TECHNOLOGY_MAGIC.pdf">NATURE, TECHNOLOGY & MAGIC</a>
+            <a href="/triangle/NATURE_TECHNOLOGY_MAGIC.pdf">NATURE, TECHNOLOGY & MAGIC</a> <small>(PDF, 48.4MB)</small>
         </li>
       </ol>
+      <div class="email-signup">
+          <p>Can I email you whenever I release new issues?</p>
+          <form name="triangle-email-signup" netlify>
+              <label>
+                  <span class="form-label">Email Address</span>
+                  <input type="email" name="email-address">
+              </label>
+              <button type="submit">SUBMIT</button>
+          </form>
+      </div>
     </main>
   </body>
 </html>
