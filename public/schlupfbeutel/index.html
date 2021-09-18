@@ -1,0 +1,265 @@
+<!doctype html>
+<html class="no-js" lang="en-US">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <title>SCHLUPFBEUTEL</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14"></script>
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+        <style>
+         * {
+             box-sizing: border-box;
+         }
+
+         body {
+             background: #E5E5E5;
+             font-family: 'IBM Plex Mono', monospace;
+         }
+
+         h1 {
+             font-size: 1rem;
+             font-weight: normal;
+             letter-spacing: 0.5em;
+             margin-bottom: 3rem;
+         }
+
+         button {
+             border: none;
+         }
+
+         .btn {
+         }
+
+         .btn--primary {
+             font: inherit;
+             font-weight: bold;
+             text-transform: uppercase;
+             padding: 1rem 3rem;
+             color: white;
+             background: #0066FF;
+         }
+
+         .btn--secondary {
+             padding: 0.5rem 1rem;
+             color: #333;
+             background: #f1f1f1;
+         }
+
+         #app {
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+             align-items: center;
+             min-height: 100vh;
+         }
+
+         .app-layout {
+             display: flex;
+             align-items: center;
+         }
+         .app-layout > :nth-child(1) {
+             order: 1;
+         }
+         .app-layout > :nth-child(2) {
+             order: 3;
+         }
+         .app-layout > :nth-child(3) {
+             order: 2;
+         }
+
+         .title-layout {
+             width: 293px;
+         }
+
+         .card {
+             background: white;
+             border-radius: 13px;
+             padding: 2.3rem 1.75rem 1.75rem;
+             min-height: 420px;
+             width: 293px;
+             display: flex;
+             flex-direction: column;
+             justify-content: space-between;
+
+             font-size: 1.125rem;
+         }
+
+         .lil-btn {
+             background-color: #f1f1f1;
+             border-radius: 99rem;
+             padding: 1rem;
+         }
+
+         .lil-btn--prev {
+             margin-right: 1rem;
+         }
+
+         .lil-btn--prev svg {
+             transform: scaleX(-1);
+         }
+
+         .lil-btn--next {
+             margin-left: 1rem;
+         }
+
+         .meta {
+             font-size: 14px;
+             color: #A5A5A5;
+             text-align: center;
+             padding-top: 0.5rem;
+         }
+
+         .time-slider {
+             position: relative;
+
+             margin: 3rem 0;
+         }
+         .time-slider__time {
+             position: absolute;
+             top: 0;
+             right: 0;
+             text-align: right;
+         }
+         label span {
+             display: block;
+             text-transform: uppercase;
+             font-size: 14px;
+         }
+         [type=range] {
+             width: 100%;
+         }
+
+         .sp-t {
+             margin-top: 1.5rem;
+         }
+
+         .ta-c {
+             text-align: center;
+         }
+        </style>
+
+    </head>
+    <body>
+        <div id="app">
+            <div class="title-layout">
+                <h1 v-if="!isStarted">SCHLUPFBEUTEL</h1>
+                <div v-if="!isLoaded" class="meta">loading...</div>
+                <div v-if="!isStarted && isLoaded">
+                    <div class="time-slider">
+                        <label>
+                            <span>Time Per Card</span>
+                            <input type="range" min="30" max="180" step="10" v-model="secondsPerCard">
+                        </label>
+                        <div class="time-slider__time">{{formatTime(secondsPerCard)}}</div>
+                    </div>
+                    <button class="btn btn--primary" v-on:click="start">start</button>
+                </div>
+            </div>
+            <div class="app-layout" v-if="isStarted && !isDone">
+                <button class="lil-btn lil-btn--prev" v-on:click="previous"><svg width="21" height="12" viewBox="0 0 21 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.8387 0L21 6L10.8387 12V7.03923H0V4.96077H10.8387V0Z" fill="black"/></svg></button>
+                <button class="lil-btn lil-btn--next" v-on:click="next"><svg width="21" height="12" viewBox="0 0 21 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.8387 0L21 6L10.8387 12V7.03923H0V4.96077H10.8387V0Z" fill="black"/></svg></button>
+                <div>
+                    <div class="card">
+                        <div>{{ cards[index] }}</div>
+                        <meter class="progress" v-bind:value="secondsRemaining" min="0" v-bind:max="secondsPerCard" v-bind:low="secondsPerCard * 0.333"></meter>
+                    </div>
+                    <div class="meta">{{ index + 1 }} of {{ cards.length }}</div>
+                </div>
+            </div>
+            <div v-if="isDone" class="ta-c">
+                <div>All done. ✨</div>
+                <button class="btn btn--secondary sp-t" v-on:click="reset">Reset</button>
+            </div>
+        </div>
+
+        <script>
+         function formatTime(seconds) {
+             const m = Math.floor(seconds/60)
+             const s = seconds % 60
+             return `${m}:${s.toString().padStart(2,'0')}`
+         }
+
+         const app = new Vue({
+             el: '#app',
+             data() {
+                 return {
+                     isLoaded: false,
+                     isStarted: false,
+                     isDone: false,
+                     index: 0,
+                     cards: [],
+                     counterID: null,
+                     secondsPerCard: 60,
+                     secondsRemaining: null,
+                 }
+             },
+             mounted () {
+                 this.fetchItems()
+             },
+             methods: {
+                 stopTicking() {
+                   window.clearInterval(this.counterID)
+                 },
+                 start() {
+                     this.isStarted = true
+                     this.startTicking()
+                     this.secondsRemaining = this.secondsPerCard
+                 },
+                 startTicking() {
+                     this.counterID = window.setInterval(() => {
+                         this.tick()
+                     }, 1000)
+                 },
+                 tick() {
+                     this.secondsRemaining -= 1
+                     if (this.secondsRemaining < 0) {
+                         this.secondsRemaining = this.secondsPerCard
+                         this.next()
+                     }
+                 },
+                 reset() {
+                     this.isStarted = false
+                     this.isDone = false
+                     this.index = 0
+                 },
+                 done() {
+                     this.isDone = true
+                     this.stopTicking()
+                 },
+                 next() {
+                     if (this.index < this.cards.length - 1) {
+                         this.index += 1
+                         this.secondsRemaining = this.secondsPerCard
+                     } else {
+                         this.done()
+                     }
+                 },
+                 previous() {
+                     if (this.index > 0) {
+                         this.index -= 1
+                         this.secondsRemaining = this.secondsPerCard
+                     } else {
+                         this.reset()
+                     }
+                 },
+                 fetchItems() {
+                     fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vRlQ8UHAIAe3nGqYYh0Jpb4C7S36qCtFwzZS5awWEPlSEJ3QiZaQU9aftUPBKFzO7h_RRk62sutw001/pub?output=csv')
+                         .then(response => response.text())
+                         .then(data => this.cards = data.split('\r\n'))
+                         .then(() => this.isLoaded = true)
+                         .catch(error => console.error(error))
+                 }
+             }
+         })
+        </script>
+
+    </body>
+</html>
