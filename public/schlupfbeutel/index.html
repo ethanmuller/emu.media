@@ -76,7 +76,7 @@
          }
 
          .title-layout {
-             width: 293px;
+             width: 420px;
          }
 
          .card {
@@ -120,13 +120,26 @@
          .time-slider {
              position: relative;
 
-             margin: 3rem 0;
+             margin: 3rem 0 0;
          }
          .time-slider__time {
              position: absolute;
              top: 0;
              right: 0;
              text-align: right;
+             font-size: 14px;
+         }
+         .split {
+             display: flex;
+             width: 100%;
+             justify-content: space-between;
+
+             margin-bottom: 3rem;
+         }
+         .split span {
+             display: block;
+             text-transform: uppercase;
+             font-size: 14px;
          }
          label span {
              display: block;
@@ -141,8 +154,16 @@
              margin-top: 1.5rem;
          }
 
+         .sp-b {
+             margin-bottom: 1.5rem;
+         }
+
          .ta-c {
              text-align: center;
+         }
+         small {
+             text-transform: uppercase;
+             opacity: 0.3;
          }
         </style>
 
@@ -150,15 +171,20 @@
     <body>
         <div id="app">
             <div class="title-layout">
-                <h1 v-if="!isStarted">SCHLUPFBEUTEL</h1>
+                <h1 v-if="!isStarted">SCHLUPFBEUTEL<br /><small>aka slip pouch</small></h1>
                 <div v-if="!isLoaded" class="meta">loading...</div>
                 <div v-if="!isStarted && isLoaded">
+                    <div class="sp-t sp-b">There are <strong>{{cards.length}} cards</strong> in the Schlupfbeutel.</div>
                     <div class="time-slider">
                         <label>
-                            <span>Time Per Card</span>
+                            <span>Time Per Card:</span>
                             <input type="range" min="30" max="180" step="10" v-model="secondsPerCard">
                         </label>
                         <div class="time-slider__time">{{formatTime(secondsPerCard)}}</div>
+                    </div>
+                    <div class="split">
+                        <span>Total Time:</span>
+                        <span>{{formatTime(secondsPerCard * cards.length)}}</span>
                     </div>
                     <button class="btn btn--primary" v-on:click="start">start</button>
                 </div>
