@@ -246,7 +246,7 @@
                             <span>Last Card:</span>
                             <input type="range" min="1" v-bind:max="cards.length" step="1" v-model="endIndex">
                         </label>
-                        <div class="time-slider__time">{{ parseInt(endIndex, 10) + 1 }}</div>
+                        <div class="time-slider__time">{{ parseInt(endIndex, 10) }}</div>
                     </div>
 
                     <div class="time-slider">
@@ -318,10 +318,20 @@
                    this.endIndex = this.cards.length
                  },
                  startIndex() {
-                     this.endIndex = Math.max(this.startIndex, this.endIndex)
+                     const a = parseInt(this.startIndex)
+                     const b = parseInt(this.endIndex)
+
+                     if (a >= b) {
+                         this.endIndex = a + 1
+                     }
                  },
                  endIndex() {
-                     this.endIndex = Math.max(this.startIndex, this.endIndex)
+                     const a = parseInt(this.startIndex)
+                     const b = parseInt(this.endIndex)
+
+                     if (b <= a) {
+                         this.startIndex = b - 1
+                     }
                  },
              },
              computed: {
@@ -339,7 +349,7 @@
                    window.clearInterval(this.counterID)
                  },
                  start() {
-                     this.hand = this.cards.slice(this.startIndex, this.endIndex)
+                     this.hand = this.cards.slice(parseInt(this.startIndex, 10), parseInt(this.endIndex, 10))
                      this.isStarted = true
                      this.startTicking()
                      this.secondsRemaining = this.secondsPerCard
