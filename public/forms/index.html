@@ -399,7 +399,7 @@
                      }
                  },
                  fetchItems() {
-                     fetch('https://api.are.na/v2/channels/drawling-8nige30zeku/contents?per=50')
+                     fetch('https://api.are.na/v2/channels/drawling-8nige30zeku/contents?per=100')
                          .then(response => response.json())
                          .then(data => this.cards = data.contents)
                          .then(() => this.isLoaded = true)
