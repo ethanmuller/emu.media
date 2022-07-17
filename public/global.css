@@ -66,6 +66,10 @@ button {
   transform-origin: bottom right;
 }
 
+.listing p {
+  margin: 0 0 1em 0.5em;
+}
+
 .listing a {
   display: inline-block;
   padding: 0.5em;
