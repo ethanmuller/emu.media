@@ -73,6 +73,9 @@
       #ig:target {
         /* display: block; */
       }
+
+      input[type=range] {
+      }
     </style>
 
   </head>
@@ -80,22 +83,29 @@
   <body>
 
     <button id="startBtn">start</button>
-    <input type="range" id="knob1" min="0" max="127" step="1">
+    <input orient="vertical" type="range" id="slider1" min="0" max="127" step="1">
+    <input orient="vertical" type="range" id="slider2" min="0" max="127" step="1">
 
 
     <script type="text/javascript" src="webpd-latest.js"></script>
     <script>
-      const knob1 = document.getElementById('knob1')
+      const slider1 = document.getElementById('slider1')
+      const slider2 = document.getElementById('slider2')
       const startBtn = document.getElementById('startBtn')
 
-      function change(e) {
-        console.log(parseInt(e.target.value, 10))
-        Pd.send('input1', [parseInt(e.target.value, 10)])
+      function slider1Change(e) {
+        Pd.send('slider1', [parseInt(e.target.value, 10)])
       }
 
-      knob1.addEventListener('input', change)
+      function slider2Change(e) {
+        console.log(e.target.value)
+        Pd.send('slider2', [parseInt(e.target.value, 10)])
+      }
 
-      fetch('./woo.pd')
+      slider1.addEventListener('input', slider1Change)
+      slider2.addEventListener('input', slider2Change)
+
+      fetch('./woo-nopow.pd')
         .then((res) => res.text())
         .then((patchStr) => {
           Pd.loadPatch(patchStr)
