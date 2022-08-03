@@ -1,4 +1,4 @@
-#N canvas 0 450 1580 366 12;
+#N canvas 0 450 1580 379 12;
 #X obj 54 576 dac~;
 #X obj 14 3 hsl 256 15 0 127 0 0 empty empty empty -2 -8 0 10 #fcfcfc
 #000000 #000000 0 1;
@@ -20,10 +20,11 @@
 #X obj 6 140 pow 4;
 #X obj 136 154 pow 2;
 #X obj 44 373 *~;
-#X obj 34 251 line~;
-#X obj 8 216 pack f 400;
+#X obj 21 298 vline~;
+#X obj 21 243 pack f 400;
 #X obj 134 206 pack f 400;
-#X obj 134 231 line~;
+#X obj 134 231 vline~;
+#X obj 294 14;
 #X connect 1 0 2 0;
 #X connect 1 0 12 0;
 #X connect 3 0 4 0;

@@ -83,8 +83,8 @@
   <body>
 
     <button id="startBtn">start</button>
-    <input orient="vertical" type="range" id="slider1" min="0" max="127" step="1">
-    <input orient="vertical" type="range" id="slider2" min="0" max="127" step="1">
+    <input type="range" id="slider1" min="0" max="127" step="1">
+    <input type="range" id="slider2" min="0" max="127" step="1">
 
 
     <script type="text/javascript" src="webpd-latest.js"></script>
@@ -105,7 +105,7 @@
       slider1.addEventListener('input', slider1Change)
       slider2.addEventListener('input', slider2Change)
 
-      fetch('./woo-nopow.pd')
+      fetch('./woo.pd')
         .then((res) => res.text())
         .then((patchStr) => {
           Pd.loadPatch(patchStr)
