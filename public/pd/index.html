@@ -74,9 +74,15 @@
         /* display: block; */
       }
 
+      .inputs {
+        display: flex;
+      }
+
       input[type=range] {
-        padding: 4em 0;
-          width: 80%;
+        width: 16px;
+          height: 256px;
+            -webkit-appearance: slider-vertical;
+              padding: 0 64px;
       }
     </style>
 
@@ -85,8 +91,10 @@
   <body>
 
     <button id="startBtn">start</button>
-    <input type="range" id="slider1" min="0" max="127" step="1">
-    <input type="range" id="slider2" min="0" max="127" step="1">
+    <div class="inputs">
+      <input orient="vertical" type="range" id="slider1" min="0" max="127" step="1">
+      <input orient="vertical" type="range" id="slider2" min="0" max="127" step="1">
+    </div>
 
 
     <script type="text/javascript" src="webpd-latest.js"></script>
