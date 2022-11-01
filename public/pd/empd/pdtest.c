@@ -1,10 +1,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_audio.h>
-#include <SDL2/SDL_video.h>
-#include <GL/gl.h>
-#include <emscripten.h>
 
+#include <emscripten.h>
 #include <stdio.h>
+
 #include "z_libpd.h"
 
 void audio(void *userdata, Uint8 *stream, int len)
@@ -37,31 +36,31 @@ void pdnoteon(int ch, int pitch, int vel) {
   printf("noteon: %d %d %d\n", ch, pitch, vel);
 }
 
-SDL_Window *window;
-
 void main1(void)
 {
-  int x = 0, y = 0, w = 0, h = 0;
-  SDL_GetWindowSize(window, &w, &h);
-  Uint32 buttons = SDL_GetMouseState(&x, &y);
-  glClearColor(x * 1.0 / w, y * 1.0 / h, 0.5, 1);
-  glClear(GL_COLOR_BUFFER_BIT);
-  SDL_GL_SwapWindow(window);
-  libpd_start_message(1);
-  libpd_add_float(24 + 60.0 * x / w);
-  libpd_finish_message("note", "float");
-  libpd_start_message(1);
-  libpd_add_float(100.0 - 100.0 * y / h);
-  libpd_finish_message("db", "float");
+  // nop
+}
+
+void knob1(float freq)
+{
+  libpd_float("knob1", freq);
+}
+
+void knob2(float freq)
+{
+  libpd_float("knob2", freq);
+}
+
+void knob3(float freq)
+{
+  libpd_float("knob3", freq);
 }
 
 int main(int argc, char **argv)
 {
-  // initialize SDL2 audio
-  SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
-  window = SDL_CreateWindow("pdtest_gui", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_OPENGL);
-  SDL_GLContext glcontext = SDL_GL_CreateContext(window);
 
+  // initialize SDL2 audio
+  SDL_Init(SDL_INIT_AUDIO);
   SDL_AudioSpec want, have;
   want.freq = 48000;
   want.format = AUDIO_F32;
@@ -71,6 +70,7 @@ int main(int argc, char **argv)
   SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, SDL_AUDIO_ALLOW_ANY_CHANGE);
   printf("want: %d %d %d %d\n", want.freq, want.format, want.channels, want.samples);
   printf("have: %d %d %d %d\n", have.freq, have.format, have.channels, have.samples);
+
 
   // initialize libpd
   libpd_set_printhook(pdprint);
@@ -88,6 +88,6 @@ int main(int argc, char **argv)
 
   // start audio processing
   SDL_PauseAudioDevice(dev, 0);
-  emscripten_set_main_loop(main1, 0, 1);
+  emscripten_set_main_loop(main1, 60, 1);
   return 0;
 }

@@ -4,9 +4,10 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>yeah boiiii</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0">
     <style>
       .emscripten { padding-right: 0; margin-left: auto; margin-right: auto; display: block; }
-      textarea.emscripten { font-family: monospace; width: 80%; }
+      textarea.emscripten { display: none; font-family: monospace; width: 80%; }
       div.emscripten { text-align: center; }
       div.emscripten_border { border: 1px solid black; }
       /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
@@ -44,6 +45,25 @@
         to {transform: rotate(360deg);}
       }
 
+      body {
+        padding: 0;
+        margin: 0;
+      }
+
+      .inputs {
+        min-height: 95vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+
+      input[type="range"] {
+        margin: 3em 0;
+        width: 128px;
+        transform: scale(2.5);
+      }
+
     </style>
   </head>
   <body>
@@ -53,14 +73,22 @@
       <progress value="0" max="100" id="progress" hidden=1></progress>  
     </div>
     <textarea class="emscripten" id="output" rows="8"></textarea>
+    <div class="inputs">
+      <input type="range" min="0" max="1" step="0.001" id="knob1">
+      <input type="range" min="0" max="1" step="0.001" id="knob2">
+      <input type="range" min="0" max="1" step="0.001" id="knob3">
+    </div>
     <script type='text/javascript'>
       var statusElement = document.getElementById('status');
       var progressElement = document.getElementById('progress');
       var spinnerElement = document.getElementById('spinner');
+      var knob1Element = document.getElementById('knob1');
+      var knob2Element = document.getElementById('knob2');
+      var knob3Element = document.getElementById('knob3');
 
       var Module = {
         preRun: [],
-        postRun: [],
+        postRun: [init],
         print: (function() {
           var element = document.getElementById('output');
           if (element) element.value = ''; // clear browser cache
@@ -114,9 +142,38 @@
           if (text) console.error('[post-exception status] ' + text);
         };
       };
+
+      function sendInput(knob, value) {
+        Module.ccall(knob, null, ['number'], [value])
+      }
+
+      function sendInputEvent(e, knob) {
+        const valueAsString = e.target.value
+        const valueAsFloat = parseFloat(valueAsString, 10)
+        sendInput(knob, valueAsFloat)
+      }
+
+      function init() {
+        knob1Element.addEventListener('input', (e) => {
+          sendInputEvent(e, 'knob1')
+        })
+        knob2Element.addEventListener('input', (e) => {
+          sendInputEvent(e, 'knob2')
+        })
+        knob3Element.addEventListener('input', (e) => {
+          sendInputEvent(e, 'knob3')
+        })
+
+        knob1Element.value = 0.333
+        sendInput('knob1', 0.333)
+
+        knob2Element.value = 0.5
+        sendInput('knob2', 0.5)
+
+        knob3Element.value = 0.666
+        sendInput('knob3', 0.666)
+      }
     </script>
-    <script async type="text/javascript" src="index.js"></script>
+    {{{ SCRIPT }}}
   </body>
 </html>
-
-

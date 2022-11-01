@@ -1,4 +1,4 @@
-#N canvas -8 85 1580 786 12;
+#N canvas -8 85 1260 636 12;
 #X obj 1316 748 clip~ -1 1;
 #X text 1233 800 ((o;
 #X text 1477 799 o));
@@ -14,7 +14,7 @@
 #X obj 637 342 threshold~ 0.99 1 0.01 1;
 #X obj 660 373 bng 15 50 10 0 empty empty empty 17 7 0 10 #fcfcfc #000000
 #000000;
-#X obj 35 58 hsl 256 15 0 127 0 0 empty empty empty -2 -8 0 10 #fcfcfc
+#X obj 21 71 hsl 256 15 0 127 0 0 empty empty empty -2 -8 0 10 #fcfcfc
 #000000 #000000 0 1;
 #X obj 143 140 s slider1;
 #X obj 329 57 hsl 256 15 0 127 0 0 empty empty empty -2 -8 0 10 #fcfcfc
@@ -27,7 +27,7 @@
 #X obj 33 16 r knob1;
 #X obj 33 37 * 127;
 #X obj 326 36 * 127;
-#X obj 1379 454 r volSlider;
+#X obj 889 830 r volSlider;
 #X floatatom 1318 300 5 0 0 0 - - - 0;
 #X obj 1247 329 s volSlider;
 #X obj 1318 260 vsl 15 32 0 127 0 0 empty empty empty 0 -9 0 10 #fcfcfc
@@ -74,11 +74,7 @@
 #X obj 94 468 pow 4;
 #X obj 660 393 random;
 #X obj 925 358 * 1100;
-#X obj 1309 792 dac~;
-#X obj 146 11 bng 15 250 50 0 empty empty empty 17 7 0 10 #fcfcfc #000000
-#000000;
-#X obj 239 2 loadbang;
-#X obj 224 26 float 70;
+#X obj 1318 825 dac~;
 #X connect 0 0 67 0;
 #X connect 0 0 67 1;
 #X connect 3 0 4 0;
@@ -140,7 +136,3 @@
 #X connect 64 0 28 0;
 #X connect 65 0 55 0;
 #X connect 66 0 65 1;
-#X connect 68 0 70 0;
-#X connect 69 0 70 0;
-#X connect 70 0 12 0;
-#X connect 70 0 14 0;
